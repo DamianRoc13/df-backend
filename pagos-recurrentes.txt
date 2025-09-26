@@ -1,0 +1,239 @@
+Introducción
+El producto Dataweb procesa transacciones normales generadas desde la interfaz web, adicional tiene como características otra modalidad de pago que se denomina recurrente el cual permite realizar cobros automáticos sin la necesidad de que el tarjeta habiente esté presente.
+
+Responsabilidades
+Datafast proporciona las herramientas para realizar la tokenización garantizando la seguridad sobres los datos sensibles de las tarjetas de créditos, sin embargo, es de total responsabilidad del comercio que adquiere este componente controlar el flujo de cobros a sus clientes.
+
+
+Sobre los Impuestos
+El comercio es responsable en enviar correctamente los campos de impuestos tanto en la transacción inicial como en la recurrencia, si acaso existe un aumento en los pagos recurrentes entonces deberá modificar adecuadamente el envío de este campo.
+
+Anulaciones
+Los pagos recurrentes no se pueden anular desde de la interfaz, se recomienda realizar de manera administrativas dichas anulaciones.
+
+Tokenización
+Por normas PCI ninguna entidad que no esté certificada puede almacenar datos completos ni parciales de tarjetas de crédito, por esta razón es necesario tokenizar los datos del tarjeta habiente, cabe recalcar que en la primera instancia cuando se tokeniza este solamente asocia los datos sensibles de una tarjeta de crédito, los otros campos como por ejemplo cédula, nombres, entre otros deben agregarse luego en la recurrencia. Existen dos maneras de hacerlo.
+
+
+
+En el momento de la transacción
+Esta modalidad permite al usuario tokenizar la tarjeta con la que desea realizar los pagos recurrentes.
+
+
+Backend
+Lo siguiente debe ser agregado en la primera función request(), se debe respetar todos los parámetros obligatorios expuesto en la guía de implementación (nombre, apellido, cedula, correo, número de transacción,etc.), este parámetro indicará que es la primera transacción dentro de una serie de pagos.
+
+                                                
+    
+                                                    "&recurringType=INITIAL"                     
+                                                
+
+                                            
+
+Frontend
+En esta parte se debe considerar dos escenarios:
+
+El cliente decide guardar (tokenizar) su tarjeta
+El comercio siempre guardará las tarjetas (deberán controlarlo dinámicamente por programación incluyendo inputtext ocultos)
+                                            
+    
+                                                <script>
+                                                    var wpwlOptions {
+                                                        onReady: function(onReady){
+                                                            var createRegistrationHtml = '<div class="customLabel">Desea guardar de manera segura sus datos?'+
+                                                                '</div><div class="customInput"><input type="checkbox" name="createRegistration"/></div>';
+                                                            $('form.wpwl-form-card').find('wpwl-button').before(createRegistrationHtml);
+                                                
+                                                            var datafast= '<br/></br><img src='+'"https://www.datafast.com.ec/images/verified.png" style='+'
+                                                            "display:block;margin:0 auto; width:100%">';
+                                                            $('form.wpwl-form-card').find('.wpwl-button').before(datafast);
+                                                        },
+                                                        style: "card",
+                                                        locale: "es",
+                                                        labels: {cvv: "Código de verificación", cardHolder: "Nombre(Igual que en la tarjeta),"}
+                                                        registrations:{
+                                                            requireCvv: true,
+                                                            hideInitialPaymentForms: true
+                                                        }
+                                                    }
+                                                </script>                     
+                                            
+
+                                        
+Finalmente obtendremos el siguiente formulario.
+
+frontend1
+Formulario de pago con la opción de guardar tarjeta (tokenizar)
+
+Stand-Alone
+Esta modalidad permite a un cliente tokenizar sus tarjetas previo a una compra futura, para el correcto funcionamiento el comercio debe garantizar un módulo dentro su portal que asocie a cada cliente con cada una de las tarjetas que posea.
+
+Para implementar el registro solo debe recordar los tres pasos que utilizó cuando implementó el botón de pagos, la diferencia se explica a continuación.
+
+
+
+
+Paso 1
+Solo se debe realizar dos cambios:
+
+Agregar la línea createRegistration=true
+Eliminar de la función el parámetro paymentType
+                                                
+    
+                                                    $url = "https://test.oppwa.com/v1/checkouts";
+                                                    $data = "entityId=" .$entityId.
+                                                        "&currency=USD".
+                                                        //"&paymentType=DB".
+                                                        "&customer.merchantCustomerId=0001".
+                                                        "&customer.email=pagorapido@test.com". 
+                                                        "&customer.identificationDocType=IDCARD".
+                                                        "&customer.identificationDocId=".$cedula.
+                                                        "&createRegistration=true";
+                                                    $data .="&testMode=EXTERNAL";                     
+                                                
+
+                                            
+
+Paso 2
+Igual que en la implementación del botón, la función anterior retorna datos en formato JSON en el cual se debe extraer el ID, ponerlo en el tag script y el formulario tiene la siguiente forma.
+
+paso2
+Formulario de registro de tarjetas (tokenización)
+
+
+Paso 3
+Igual que en la implementación del botón de pagos, pero en este caso lo que cambia es la url del parámetro resourcePath, al final cambia la palabra por registration
+
+                                            
+
+                                                resourcePath=/v1/checkouts/{checkoutId}/registration
+                                            
+
+                                    
+Una vez presionado el botón de registrar, en el JSOn de respuesta el TOKEN Viene en el campo ID
+
+
+Pago Recurrente
+Las acciones anteriores permitieron crear un token de la siguiente estructura 8ac7a4a26ccd39af016cce74ce5f4g4f, en este constan los datos de la tarjeta de crédito. Es de suma importancia que en el desarrollo cada token sea asociado a un único ID de cliente dentro de la plataforma del comercio, para esto deberá crear una estructura de base de datos adecuada, ya esto es a criterio del desarrollador. No olvidar que deben enviar también los parámetros obligatorios expuestos en la guía de implementación del botón de pagos.
+
+pago_recurrente
+Referencia de asociación de un cliente con tokens
+
+Para realizar el proceso de recurrencia debe utilizar el siguiente código referencial, el campo de impuestos es igual como se lo implementó en el botón de pagos
+
+                                            
+    
+                                                function request($token, $amount, $token, $custom, $merchant){
+                                                    $url = "htps://test.oppwa.com/v1/registrations/".$token."/payments";
+                                                    $data = "entityId=8a8294185a65bf5e015a6c8b89a10d8d".
+                                                            "&amount=1.12".//&amount.
+                                                            "&currency=USD" .
+                                                            "&paymentType=DB" . 
+                                                            "&risk.parameters[USER_DATA2]=PagoRapidoDF".//Nombre diferente al canal principal
+                                                            "&recurrentType=REPEATED". 
+                                                            "&merchantTransactionId=transaction_".$trx.//Identificador incremental de la recurrencia
+                                                            "&customParameters[SHOPPER_MID]=1000000505".
+                                                            "&customParameters[SHOPPER_TID]=PD100406".
+                                                            "&customParameters[SHOPPER_ECI]=0103910".
+                                                            "&customParameters[SHOPPER_PSERV]=17913101". 
+                                                            "&customParameters[SHOPPER_VAL_BASE0]=".$base0
+                                                            "&customParameters[SHOPPER_VAL_BASEIMP]=.$base12".
+                                                            "&customParameters[SHOPPER_VAL_IVA]=.$valoriva";
+                                                            "&customParameters[SHOPPER_VERSIONDF]=2";
+                                                    $data .="&testMode=EXTERNAL";
+                                                    $ch = curl_init();
+                                                    curl_setopt($ch, CURLOPT_URL, $url);
+                                                    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                                                        'Authorization:Bearer OGE4Mjk0MTg1MzNjZjMxZDAxNTMzZDA2ZmqwNDA3NDh8WHQ3RjIyUUVOWA=='));
+                                                    curl_setopt($ch, CURLOPT_POST, '1');
+                                                    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+                                                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); //this should be set to true in production
+                                                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                                                    $responseData = curl_exec($ch);
+                                                    if(curl_errno($ch)){
+                                                        return curl_error($ch);
+                                                    }
+                                                    curl_close($ch);
+                                                    return $responseData;
+                                                }
+                                            
+
+                                        
+Como podrán observar en la figura 5, el campo $token en la URL es de suma importancia sin olvidar el campo recurringType=REPEATED adicional agregar el campo risk.parameters[USER_DATA1]=REPEATED
+
+Para salir a producción se debe solicitar nuevas credenciales (EntityId / Autorizador) para poder diferenciarlos en nuestra plataforma.
+
+A continuación, el código de ejemplo en PHP. Como podrán observar, en la URL se ubica el Token del cual se hará el pago recurrente, cabe recalcar que todo está en ambiente de pruebas.
+
+                                        
+
+                                            function request() { 
+                                             $url = "https://test.oppwa.com/v1/registrations/".$token."/payments"; 
+                                             $data = "entityId=8a8294185a65bf5e015a6c8b89a10d8d". 
+                                             "&amount=1.12".//$amount. 
+                                             "¤cy=USD" . 
+                                             "&paymentType=DB" . 
+                                             "&risk.parameters[USER_DATA2]=PagoRapidoDF".//Nombre diferente al canal principal 
+                                             "&recurringType=REPEATED". 
+                                             "&risk.parameters[USER_DATA1]=REPEATED". 
+                                             "&merchantTransactionId=transaction_".$trx.//identificador incremental de la recurrencia 
+                                             "&customParameters[SHOPPER_MID]=1000000505". 
+                                             "&customParameters[SHOPPER_TID]=PD100406". 
+                                             "&customParameters[SHOPPER_ECI]=0103910".
+                                             "&customParameters[SHOPPER_PSERV]=17913101". 
+                                             "&customParameters[SHOPPER_VAL_BASE0]=".$base0. 
+                                             "&customParameters[SHOPPER_VAL_BASEIMP]=".$base12. 
+                                             "&customParameters[SHOPPER_VAL_IVA]=".$valoriva. 
+                                             "&customParameters[SHOPPER_VERSIONDF]=2"; 
+                                             $data .="&testMode=EXTERNAL"; 
+                                             $ch = curl_init(); 
+                                             curl_setopt($ch, CURLOPT_URL, $url); 
+                                             curl_setopt($ch, CURLOPT_HTTPHEADER, array('Authorization:Bearer OGE4Mjk0MTg1MzNjZjMxZDAxNTMzZDA2ZmQwNDA3NDh
+                                             8WHQ3RjIyUUVOWA==')); 
+                                             curl_setopt($ch, CURLOPT_POST, 1); 
+                                             curl_setopt($ch, CURLOPT_POSTFIELDS, $data); 
+                                             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);// this should be set to true in production 
+                                             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); 
+                                             $responseData = curl_exec($ch); 
+                                             if(curl_errno($ch)) { 
+                                              return curl_error($ch); 
+                                             } 
+                                             curl_close($ch); 
+                                             return $responseData; 
+                                            } 
+                                        
+
+                                    
+La ejecución de esta función tendrá como respuesta un JSON de la siguiente manera
+
+                                            
+    
+                                                {
+                                                    "id":"8ac7a49f6ccd36fa016ccf0d766707a0",
+                                                    "paymentType":"DB",
+                                                    "amount":"1.12",
+                                                    "currency":"USD",
+                                                    "descriptor":"0940.0933.8506 Low Risk Sector",
+                                                    "result":{"code":"000.100.110",
+                                                    "description":"Request successfully processed in 'Merchant in Integrator Test Mode'"},
+                                                    "resultDetails":{"ExtendedDescription":"Transaction suceeded",
+                                                        "RiskStatusCode":"APPROVE",
+                                                        "ResponseCode":"00",
+                                                        "clearingInstituteName":"Datafast",
+                                                        "AuthCode":"023336",
+                                                        "ConnetorTxID1":"8ac7a49f6ccd36fa016ccf0d766707a0",
+                                                        "RequestId":"700003447737",
+                                                        "RiskFraudStatusCode":"ACCEPT",
+                                                        "RiskResponseCode":"0100",
+                                                        "ReferenceNbr":"190826_000247",
+                                                        "AcquirerResponse":"00_04VG",
+                                                        "OrderId":"000074713859"
+                                                },
+                                                "customParameters":{
+                                                    "1000000505_PD100406":"0081003007010391000040120000000000120510081791310",
+                                                    "risk":{"score":"0"},
+                                                    "buildNumber":"1a3ea91512d1c7b8a7b49b36c3afe820628f94da@2019-08-23 11:26:37 +0000",
+                                                    "timestamp": "2019-08-26 17:51:05+0000",
+                                                    "ndc": "8a8294185a65bf5e015a6c8b89a10d8d_f9951e5a1da148cf9f5d6d8ad5659a43"}
+                                                                       
+                                            

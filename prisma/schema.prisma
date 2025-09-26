@@ -1,0 +1,137 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Clientes del sistema
+model Customer {
+  id                 String   @id @default(cuid())
+  merchantCustomerId String   @unique // ID que enviamos al gateway
+  email              String   @unique
+  givenName          String
+  middleName         String
+  surname            String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relaciones
+  subscriptions Subscription[]
+  payments      Payment[]
+  tokens        PaymentToken[]
+
+  @@map("customers")
+}
+
+// Tokens de pago para recurrencias
+model PaymentToken {
+  id          String   @id @default(cuid())
+  customerId  String
+  token       String   @unique // Token del gateway (registrations[0].id)
+  brand       String // VISA, MASTERCARD, etc.
+  last4       String // Últimos 4 dígitos
+  expiryMonth Int
+  expiryYear  Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  @@map("payment_tokens")
+}
+
+// Suscripciones (solo para planes mensuales)
+model Subscription {
+  id              String             @id @default(cuid())
+  customerId      String
+  tokenId         String
+  planType        SubscriptionPlan // GYM_MONTHLY, APP_MONTHLY
+  status          SubscriptionStatus @default(ACTIVE)
+  amount          Decimal            @db.Decimal(10, 2)
+  currency        String             @default("USD")
+  nextBillingDate DateTime
+  lastBillingDate DateTime?
+  failedAttempts  Int                @default(0)
+  maxRetries      Int                @default(3)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relaciones
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  token    PaymentToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@map("subscriptions")
+}
+
+// Histórico de todos los pagos (únicos y recurrentes)
+model Payment {
+  id                    String      @id @default(cuid())
+  customerId            String
+  subscriptionId        String? // Solo para pagos recurrentes
+  tokenId               String? // Solo para pagos recurrentes
+  paymentType           PaymentType
+  merchantTransactionId String      @unique
+  amount                Decimal     @db.Decimal(10, 2)
+  currency              String      @default("USD")
+
+  // Impuestos
+  base0   Decimal @db.Decimal(10, 2)
+  baseImp Decimal @db.Decimal(10, 2)
+  iva     Decimal @db.Decimal(10, 2)
+
+  // Respuesta del gateway
+  gatewayResponse   Json // JSON completo de respuesta
+  resultCode        String // result.code del gateway
+  resultDescription String? // result.description del gateway
+  resourcePath      String? // Para seguimiento
+
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relaciones
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  token        PaymentToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
+}
+
+// Enums
+enum SubscriptionPlan {
+  GYM_MONTHLY // $77/mes
+  APP_MONTHLY // $19.99/mes
+  TEST_MONTHLY // $1/mes (pruebas)
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  FAILED
+}
+
+enum PaymentType {
+  ONE_TIME // Pago único (planes anuales)
+  RECURRING // Pago recurrente (planes mensuales)
+  INITIAL // Primer pago de suscripción (con tokenización)
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FAILED
+  CANCELLED
+}

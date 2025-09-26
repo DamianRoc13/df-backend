@@ -1,0 +1,151 @@
+import { HttpService } from '@nestjs/axios';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateSubscriptionDto, SubscriptionPlanDto } from './dto/create-subscription.dto';
+export declare class PaymentsService {
+    private http;
+    private prisma;
+    constructor(http: HttpService, prisma: PrismaService);
+    private bearer;
+    private entity;
+    private oppUrl;
+    createCheckout(input: any): Promise<any>;
+    getPaymentStatus(resourcePath: string): Promise<any>;
+    createSubscriptionCheckout(dto: CreateSubscriptionDto): Promise<any>;
+    completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto): Promise<{
+        subscription: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            planType: import("@prisma/client").$Enums.SubscriptionPlan;
+            status: import("@prisma/client").$Enums.SubscriptionStatus;
+            amount: import("@prisma/client/runtime/library").Decimal;
+            currency: string;
+            nextBillingDate: Date;
+            lastBillingDate: Date | null;
+            failedAttempts: number;
+            maxRetries: number;
+            customerId: string;
+            tokenId: string;
+        };
+        paymentToken: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            token: string;
+            customerId: string;
+            brand: string;
+            last4: string;
+            expiryMonth: number;
+            expiryYear: number;
+            isActive: boolean;
+        };
+        paymentResult: any;
+    }>;
+    processRecurringPayment(subscriptionId: string): Promise<{
+        payment: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: import("@prisma/client").$Enums.PaymentStatus;
+            amount: import("@prisma/client/runtime/library").Decimal;
+            currency: string;
+            customerId: string;
+            tokenId: string | null;
+            paymentType: import("@prisma/client").$Enums.PaymentType;
+            merchantTransactionId: string;
+            base0: import("@prisma/client/runtime/library").Decimal;
+            baseImp: import("@prisma/client/runtime/library").Decimal;
+            iva: import("@prisma/client/runtime/library").Decimal;
+            gatewayResponse: import("@prisma/client/runtime/library").JsonValue;
+            resultCode: string;
+            resultDescription: string | null;
+            resourcePath: string | null;
+            subscriptionId: string | null;
+        };
+        paymentResult: any;
+        success: boolean;
+    }>;
+    getDueSubscriptions(): Promise<({
+        customer: {
+            id: string;
+            merchantCustomerId: string;
+            email: string;
+            givenName: string;
+            middleName: string;
+            surname: string;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        token: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            token: string;
+            customerId: string;
+            brand: string;
+            last4: string;
+            expiryMonth: number;
+            expiryYear: number;
+            isActive: boolean;
+        };
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        planType: import("@prisma/client").$Enums.SubscriptionPlan;
+        status: import("@prisma/client").$Enums.SubscriptionStatus;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        nextBillingDate: Date;
+        lastBillingDate: Date | null;
+        failedAttempts: number;
+        maxRetries: number;
+        customerId: string;
+        tokenId: string;
+    })[]>;
+    pauseSubscription(subscriptionId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        planType: import("@prisma/client").$Enums.SubscriptionPlan;
+        status: import("@prisma/client").$Enums.SubscriptionStatus;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        nextBillingDate: Date;
+        lastBillingDate: Date | null;
+        failedAttempts: number;
+        maxRetries: number;
+        customerId: string;
+        tokenId: string;
+    }>;
+    cancelSubscription(subscriptionId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        planType: import("@prisma/client").$Enums.SubscriptionPlan;
+        status: import("@prisma/client").$Enums.SubscriptionStatus;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        nextBillingDate: Date;
+        lastBillingDate: Date | null;
+        failedAttempts: number;
+        maxRetries: number;
+        customerId: string;
+        tokenId: string;
+    }>;
+    resumeSubscription(subscriptionId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        planType: import("@prisma/client").$Enums.SubscriptionPlan;
+        status: import("@prisma/client").$Enums.SubscriptionStatus;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        nextBillingDate: Date;
+        lastBillingDate: Date | null;
+        failedAttempts: number;
+        maxRetries: number;
+        customerId: string;
+        tokenId: string;
+    }>;
+}
