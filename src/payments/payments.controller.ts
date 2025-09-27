@@ -113,4 +113,34 @@ export class PaymentsController {
       };
     }
   }
+
+  @Get('json-response')
+  @ApiOperation({ summary: 'Endpoint que devuelve JSON puro de la respuesta del pago' })
+  async jsonResponse(
+    @Query('type') type: string,
+    @Query('id') checkoutId: string,
+    @Query('resourcePath') resourcePath: string,
+    @Query('customerId') customerId?: string,
+    @Query('planType') planType?: string
+  ) {
+    console.log('📄 JSON Response solicitado:', { type, checkoutId, resourcePath, customerId, planType });
+    
+    try {
+      if (type === 'subscription' && customerId && planType) {
+        // Para suscripciones
+        const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType as any);
+        return result; // Devuelve el JSON directo sin wrapper
+      } else {
+        // Para pagos únicos o cuando no hay parámetros de suscripción
+        const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
+        return paymentStatus; // Devuelve el JSON directo del gateway
+      }
+    } catch (error) {
+      return {
+        error: true,
+        message: error.message,
+        details: error
+      };
+    }
+  }
 }

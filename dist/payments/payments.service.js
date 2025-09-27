@@ -119,10 +119,12 @@ let PaymentsService = class PaymentsService {
             entityId: this.entity(),
             amount,
             currency: 'USD',
+            'paymentType': 'DB',
             'customer.givenName': dto.givenName,
             'customer.middleName': dto.middleName,
             'customer.surname': dto.surname,
             'customer.ip': dto.customerIp,
+            'customer.email': dto.email,
             'merchantTransactionId': dto.merchantTransactionId,
             'customer.merchantCustomerId': dto.merchantCustomerId,
             'customParameters[SHOPPER_VAL_BASE0]': dto.base0,
@@ -134,7 +136,7 @@ let PaymentsService = class PaymentsService {
             'customParameters[SHOPPER_PSERV]': '17913101',
             'customParameters[SHOPPER_VERSIONDF]': '2',
             'risk.parameters[USER_DATA2]': process.env.MERCHANT_NAME || 'TuComercio',
-            'createRegistration': 'true'
+            'recurringType': 'INITIAL'
         };
         if (process.env.TEST_MODE)
             params['testMode'] = process.env.TEST_MODE;
@@ -232,7 +234,7 @@ let PaymentsService = class PaymentsService {
         }
     }
     async completeSubscriptionSetup(resourcePath, customerId, planType) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         console.log('🔄 Iniciando completeSubscriptionSetup:', { resourcePath, customerId, planType });
         const paymentResult = await this.getPaymentStatus(resourcePath);
         console.log('📊 Respuesta del pago:', JSON.stringify(paymentResult, null, 2));
@@ -245,22 +247,75 @@ let PaymentsService = class PaymentsService {
                 result: paymentResult.result
             });
         }
-        const registrations = paymentResult.registrations;
-        console.log('🎫 Registrations found:', registrations);
-        if (!registrations || registrations.length === 0) {
-            console.error('❌ No se encontraron registrations en la respuesta del pago');
-            console.error('Respuesta completa:', JSON.stringify(paymentResult, null, 2));
-            throw new common_1.BadRequestException('No se pudo crear el token de pago - no hay registrations en la respuesta');
+        console.log('🎫 Buscando token en la respuesta del pago (modalidad "En el momento de la transacción")...');
+        console.log('📊 Respuesta completa para búsqueda de token:', JSON.stringify(paymentResult, null, 2));
+        let tokenData;
+        if (paymentResult.registrations && paymentResult.registrations.length > 0) {
+            tokenData = paymentResult.registrations[0];
+            console.log('🎫 Token encontrado en registrations:', JSON.stringify(tokenData, null, 2));
         }
-        const tokenData = registrations[0];
-        console.log('🎫 Token data:', JSON.stringify(tokenData, null, 2));
-        const payment = await this.prisma.payment.findFirst({
-            where: { resourcePath },
+        else if (paymentResult.registrationId) {
+            console.log('🎫 Token encontrado como registrationId:', paymentResult.registrationId);
+            tokenData = { id: paymentResult.registrationId };
+        }
+        else if ((_c = paymentResult.card) === null || _c === void 0 ? void 0 : _c.registrationId) {
+            console.log('🎫 Token encontrado en card.registrationId:', paymentResult.card.registrationId);
+            tokenData = { id: paymentResult.card.registrationId };
+        }
+        else {
+            console.log('🔍 Buscando token en todas las propiedades...');
+            const searchForToken = (obj, path = '') => {
+                for (const [key, value] of Object.entries(obj)) {
+                    const currentPath = path ? `${path}.${key}` : key;
+                    if (typeof value === 'string' && value.match(/^[a-f0-9]{32}$/i)) {
+                        console.log(`🎫 Posible token encontrado en ${currentPath}:`, value);
+                        return value;
+                    }
+                    else if (typeof value === 'object' && value !== null) {
+                        const found = searchForToken(value, currentPath);
+                        if (found)
+                            return found;
+                    }
+                }
+                return null;
+            };
+            const foundToken = searchForToken(paymentResult);
+            if (foundToken) {
+                tokenData = { id: foundToken };
+                console.log('✅ Token encontrado mediante búsqueda:', foundToken);
+            }
+        }
+        if (!(tokenData === null || tokenData === void 0 ? void 0 : tokenData.id)) {
+            console.error('❌ No se encontró token en la respuesta del pago');
+            console.error('🔍 Campos disponibles en la respuesta:', Object.keys(paymentResult));
+            throw new common_1.BadRequestException({
+                message: 'No se pudo obtener el token de pago con recurringType=INITIAL',
+                details: {
+                    resourcePath,
+                    availableFields: Object.keys(paymentResult),
+                    hasRegistrations: !!paymentResult.registrations,
+                    registrationsLength: ((_d = paymentResult.registrations) === null || _d === void 0 ? void 0 : _d.length) || 0
+                }
+            });
+        }
+        const merchantTxnId = paymentResult.merchantTransactionId;
+        console.log('🔍 Buscando pago por merchantTransactionId:', merchantTxnId);
+        let payment = await this.prisma.payment.findFirst({
+            where: { merchantTransactionId: merchantTxnId },
             include: { customer: true }
         });
         if (!payment) {
-            console.error('❌ Pago no encontrado en BD para resourcePath:', resourcePath);
-            throw new common_1.NotFoundException('Pago no encontrado');
+            console.log('⚠️ Pago no encontrado por merchantTransactionId, intentando por resourcePath...');
+            payment = await this.prisma.payment.findFirst({
+                where: { resourcePath },
+                include: { customer: true }
+            });
+        }
+        if (!payment) {
+            console.error('❌ Pago no encontrado en BD');
+            console.error('🔍 Búsqueda por merchantTransactionId:', merchantTxnId);
+            console.error('🔍 Búsqueda por resourcePath:', resourcePath);
+            throw new common_1.NotFoundException(`Pago no encontrado para merchantTransactionId: ${merchantTxnId} o resourcePath: ${resourcePath}`);
         }
         console.log('📄 Pago encontrado en BD:', payment.id);
         await this.prisma.payment.update({
@@ -273,54 +328,84 @@ let PaymentsService = class PaymentsService {
             }
         });
         console.log('💾 Actualizando pago en BD');
-        console.log('🎫 Creando token de pago:', {
+        const tokenToSave = tokenData.id;
+        const customerIdFromPayment = payment.customerId;
+        console.log('🎫 Preparando datos del token:', {
+            tokenToSave,
+            customerIdFromPayment,
             customerId,
-            token: tokenData.id,
-            brand: paymentResult.paymentBrand || 'UNKNOWN'
+            relatedPaymentId: payment.id,
+            brand: paymentResult.paymentBrand,
+            last4: (_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.last4Digits,
+            expiryMonth: (_f = paymentResult.card) === null || _f === void 0 ? void 0 : _f.expiryMonth,
+            expiryYear: (_g = paymentResult.card) === null || _g === void 0 ? void 0 : _g.expiryYear
         });
-        const paymentToken = await this.prisma.paymentToken.create({
-            data: {
-                customerId,
-                token: tokenData.id,
-                brand: paymentResult.paymentBrand || 'UNKNOWN',
-                last4: ((_c = paymentResult.card) === null || _c === void 0 ? void 0 : _c.last4Digits) || '0000',
-                expiryMonth: parseInt(((_d = paymentResult.card) === null || _d === void 0 ? void 0 : _d.expiryMonth) || '12'),
-                expiryYear: parseInt(((_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.expiryYear) || '2030'),
-                isActive: true
-            }
-        });
-        console.log('✅ Token creado exitosamente:', paymentToken.id);
-        const nextBillingDate = new Date();
-        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-        const planPrices = {
-            [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 77.00,
-            [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 19.99,
-            [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 1.00
-        };
-        console.log('📅 Creando suscripción:', {
-            customerId,
-            tokenId: paymentToken.id,
-            planType,
-            amount: planPrices[planType],
-            nextBillingDate
-        });
-        const subscription = await this.prisma.subscription.create({
-            data: {
-                customerId,
+        try {
+            const paymentToken = await this.prisma.paymentToken.create({
+                data: {
+                    customerId: customerIdFromPayment,
+                    token: tokenToSave,
+                    brand: paymentResult.paymentBrand || 'UNKNOWN',
+                    last4: ((_h = paymentResult.card) === null || _h === void 0 ? void 0 : _h.last4Digits) || '0000',
+                    expiryMonth: parseInt(((_j = paymentResult.card) === null || _j === void 0 ? void 0 : _j.expiryMonth) || '12'),
+                    expiryYear: parseInt(((_k = paymentResult.card) === null || _k === void 0 ? void 0 : _k.expiryYear) || '2030'),
+                    isActive: true
+                }
+            });
+            console.log('✅ Token guardado exitosamente en BD:', {
+                tokenId: paymentToken.id,
+                token: tokenToSave,
+                customerId: customerIdFromPayment,
+                relatedPaymentId: payment.id
+            });
+            await this.prisma.payment.update({
+                where: { id: payment.id },
+                data: { tokenId: paymentToken.id }
+            });
+            console.log('✅ Pago actualizado con tokenId:', paymentToken.id);
+            const nextBillingDate = new Date();
+            nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+            const planPrices = {
+                [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 77.00,
+                [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 19.99,
+                [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 1.00
+            };
+            console.log('📅 Creando suscripción:', {
+                customerId: customerIdFromPayment,
                 tokenId: paymentToken.id,
                 planType,
                 amount: planPrices[planType],
-                nextBillingDate,
-                lastBillingDate: new Date(),
-                status: 'ACTIVE'
-            }
-        });
-        console.log('🎉 Suscripción creada exitosamente:', subscription.id);
-        return {
-            subscription,
-            paymentToken,
-            paymentResult
-        };
+                nextBillingDate
+            });
+            const subscription = await this.prisma.subscription.create({
+                data: {
+                    customerId: customerIdFromPayment,
+                    tokenId: paymentToken.id,
+                    planType,
+                    amount: planPrices[planType],
+                    nextBillingDate,
+                    lastBillingDate: new Date(),
+                    status: 'ACTIVE'
+                }
+            });
+            console.log('🎉 Suscripción creada exitosamente:', {
+                subscriptionId: subscription.id,
+                customerId: customerIdFromPayment,
+                tokenId: paymentToken.id,
+                planType,
+                amount: planPrices[planType]
+            });
+            return {
+                subscription,
+                paymentToken,
+                paymentResult,
+                customerId: customerIdFromPayment
+            };
+        }
+        catch (error) {
+            console.error('❌ Error en el proceso de tokenización/suscripción:', error);
+            throw new common_1.InternalServerErrorException(`Error en el proceso: ${error.message}`);
+        }
     }
     async processRecurringPayment(subscriptionId) {
         var _a, _b, _c, _d;

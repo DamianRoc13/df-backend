@@ -80,6 +80,26 @@ let PaymentsController = class PaymentsController {
             };
         }
     }
+    async jsonResponse(type, checkoutId, resourcePath, customerId, planType) {
+        console.log('📄 JSON Response solicitado:', { type, checkoutId, resourcePath, customerId, planType });
+        try {
+            if (type === 'subscription' && customerId && planType) {
+                const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType);
+                return result;
+            }
+            else {
+                const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
+                return paymentStatus;
+            }
+        }
+        catch (error) {
+            return {
+                error: true,
+                message: error.message,
+                details: error
+            };
+        }
+    }
 };
 exports.PaymentsController = PaymentsController;
 __decorate([
@@ -168,6 +188,18 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "paymentCallback", null);
+__decorate([
+    (0, common_1.Get)('json-response'),
+    (0, swagger_1.ApiOperation)({ summary: 'Endpoint que devuelve JSON puro de la respuesta del pago' }),
+    __param(0, (0, common_1.Query)('type')),
+    __param(1, (0, common_1.Query)('id')),
+    __param(2, (0, common_1.Query)('resourcePath')),
+    __param(3, (0, common_1.Query)('customerId')),
+    __param(4, (0, common_1.Query)('planType')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], PaymentsController.prototype, "jsonResponse", null);
 exports.PaymentsController = PaymentsController = __decorate([
     (0, swagger_1.ApiTags)('payments'),
     (0, common_1.Controller)('payments'),

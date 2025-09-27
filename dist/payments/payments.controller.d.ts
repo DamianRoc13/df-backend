@@ -40,6 +40,7 @@ export declare class PaymentsController {
             isActive: boolean;
         };
         paymentResult: any;
+        customerId: string;
     }>;
     chargeSubscription(subscriptionId: string): Promise<{
         payment: {
@@ -51,6 +52,7 @@ export declare class PaymentsController {
             currency: string;
             customerId: string;
             tokenId: string | null;
+            subscriptionId: string | null;
             paymentType: import("@prisma/client").$Enums.PaymentType;
             merchantTransactionId: string;
             base0: import("@prisma/client/runtime/library").Decimal;
@@ -60,7 +62,6 @@ export declare class PaymentsController {
             resultCode: string;
             resultDescription: string | null;
             resourcePath: string | null;
-            subscriptionId: string | null;
         };
         paymentResult: any;
         success: boolean;
@@ -154,4 +155,5 @@ export declare class PaymentsController {
         message: string;
         data: any;
     }>;
+    jsonResponse(type: string, checkoutId: string, resourcePath: string, customerId?: string, planType?: string): Promise<any>;
 }

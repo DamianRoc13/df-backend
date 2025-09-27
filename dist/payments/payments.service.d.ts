@@ -40,6 +40,7 @@ export declare class PaymentsService {
             isActive: boolean;
         };
         paymentResult: any;
+        customerId: string;
     }>;
     processRecurringPayment(subscriptionId: string): Promise<{
         payment: {
@@ -51,6 +52,7 @@ export declare class PaymentsService {
             currency: string;
             customerId: string;
             tokenId: string | null;
+            subscriptionId: string | null;
             paymentType: import("@prisma/client").$Enums.PaymentType;
             merchantTransactionId: string;
             base0: import("@prisma/client/runtime/library").Decimal;
@@ -60,7 +62,6 @@ export declare class PaymentsService {
             resultCode: string;
             resultDescription: string | null;
             resourcePath: string | null;
-            subscriptionId: string | null;
         };
         paymentResult: any;
         success: boolean;
