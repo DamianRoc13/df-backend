@@ -446,10 +446,11 @@ export class PaymentsService {
         nextBillingDate
       });
 
+      // Crear la suscripción y relacionarla con todos los registros
       // @ts-ignore - Temporal hasta que se actualicen los tipos de Prisma
       const subscription = await this.prisma.subscription.create({
         data: {
-          customerId: customerIdFromPayment, // Usar el customerId del pago
+          customerId: customerIdFromPayment,
           tokenId: paymentToken.id,
           planType,
           amount: planPrices[planType],
@@ -467,8 +468,39 @@ export class PaymentsService {
         amount: planPrices[planType]
       });
 
+      // Actualizar el pago inicial para relacionarlo con la suscripción
+      // @ts-ignore - Temporal hasta que se actualicen los tipos de Prisma
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          subscriptionId: subscription.id, // Relacionar el pago con la suscripción
+          paymentType: 'INITIAL', // Marcar como pago inicial
+          status: 'APPROVED',
+          resultCode: paymentResult.result.code,
+          resultDescription: paymentResult.result.description,
+          updatedAt: new Date()
+        }
+      });
+
+      console.log('✅ Pago inicial actualizado con subscriptionId:', subscription.id);
+
+      // Consultar la suscripción con todas sus relaciones
+      // @ts-ignore - Temporal hasta que se actualicen los tipos de Prisma
+      const completeSubscription = await this.prisma.subscription.findUnique({
+        where: { id: subscription.id },
+        include: {
+          customer: true,
+          token: true,
+          payments: { // Incluir todos los pagos relacionados
+            orderBy: { 
+              createdAt: 'asc' 
+            }
+          }
+        }
+      });
+
       return {
-        subscription,
+        subscription: completeSubscription,
         paymentToken,
         paymentResult,
         customerId: customerIdFromPayment
@@ -554,24 +586,38 @@ export class PaymentsService {
       const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
       const isSuccess = successCodes.includes(paymentResult.result?.code);
 
-      // Registrar el pago en BD
+      // Registrar el pago recurrente en BD
       // @ts-ignore - Temporal hasta que se actualicen los tipos de Prisma
       const payment = await this.prisma.payment.create({
         data: {
           customerId: subscription.customerId,
-          subscriptionId: subscription.id,
+          subscriptionId: subscription.id, // Relacionar con la suscripción
           tokenId: subscription.tokenId,
-          paymentType: 'RECURRING',
+          paymentType: 'RECURRING', // Tipo para pagos recurrentes
           merchantTransactionId,
           amount,
           currency: 'USD',
           base0: 0,
           baseImp,
           iva,
-          gatewayResponse: paymentResult,
+          gatewayResponse: {
+            ...paymentResult,
+            // Incluir información adicional en el JSON de respuesta
+            billingInfo: {
+              cycleDate: subscription.nextBillingDate,
+              attemptNumber: subscription.failedAttempts + 1,
+              isRetry: subscription.failedAttempts > 0
+            }
+          },
           resultCode: paymentResult.result?.code || 'FAILED',
-          resultDescription: paymentResult.result?.description,
+          resultDescription: `${paymentResult.result?.description} (Intento ${subscription.failedAttempts + 1})`,
           status: isSuccess ? 'APPROVED' : 'REJECTED'
+        },
+        // Incluir relaciones en la respuesta
+        include: {
+          subscription: true,
+          token: true,
+          customer: true
         }
       });
 

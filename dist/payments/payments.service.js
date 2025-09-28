@@ -395,8 +395,32 @@ let PaymentsService = class PaymentsService {
                 planType,
                 amount: planPrices[planType]
             });
+            await this.prisma.payment.update({
+                where: { id: payment.id },
+                data: {
+                    subscriptionId: subscription.id,
+                    paymentType: 'INITIAL',
+                    status: 'APPROVED',
+                    resultCode: paymentResult.result.code,
+                    resultDescription: paymentResult.result.description,
+                    updatedAt: new Date()
+                }
+            });
+            console.log('✅ Pago inicial actualizado con subscriptionId:', subscription.id);
+            const completeSubscription = await this.prisma.subscription.findUnique({
+                where: { id: subscription.id },
+                include: {
+                    customer: true,
+                    token: true,
+                    payments: {
+                        orderBy: {
+                            createdAt: 'asc'
+                        }
+                    }
+                }
+            });
             return {
-                subscription,
+                subscription: completeSubscription,
                 paymentToken,
                 paymentResult,
                 customerId: customerIdFromPayment
@@ -472,10 +496,22 @@ let PaymentsService = class PaymentsService {
                     base0: 0,
                     baseImp,
                     iva,
-                    gatewayResponse: paymentResult,
+                    gatewayResponse: {
+                        ...paymentResult,
+                        billingInfo: {
+                            cycleDate: subscription.nextBillingDate,
+                            attemptNumber: subscription.failedAttempts + 1,
+                            isRetry: subscription.failedAttempts > 0
+                        }
+                    },
                     resultCode: ((_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.code) || 'FAILED',
-                    resultDescription: (_c = paymentResult.result) === null || _c === void 0 ? void 0 : _c.description,
+                    resultDescription: `${(_c = paymentResult.result) === null || _c === void 0 ? void 0 : _c.description} (Intento ${subscription.failedAttempts + 1})`,
                     status: isSuccess ? 'APPROVED' : 'REJECTED'
+                },
+                include: {
+                    subscription: true,
+                    token: true,
+                    customer: true
                 }
             });
             if (isSuccess) {

@@ -109,10 +109,14 @@ model Payment {
 }
 
 // Enums
+// Tipos de planes de suscripción
+// GYM_MONTHLY: $77/mes
+// APP_MONTHLY: $19.99/mes
+// TEST_MONTHLY: $1/mes (pruebas)
 enum SubscriptionPlan {
-  GYM_MONTHLY // $77/mes
-  APP_MONTHLY // $19.99/mes
-  TEST_MONTHLY // $1/mes (pruebas)
+  GYM_MONTHLY
+  APP_MONTHLY
+  TEST_MONTHLY
 }
 
 enum SubscriptionStatus {
