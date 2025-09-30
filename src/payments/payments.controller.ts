@@ -131,8 +131,8 @@ export class PaymentsController {
         const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType as any);
         return result; // Devuelve el JSON directo sin wrapper
       } else {
-        // Para pagos únicos o cuando no hay parámetros de suscripción
-        const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
+        // Para pagos únicos
+        const paymentStatus = await this.svc.getPaymentStatus(resourcePath, customerId);
         return paymentStatus; // Devuelve el JSON directo del gateway
       }
     } catch (error) {

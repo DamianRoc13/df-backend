@@ -24,6 +24,50 @@ export class PaymentsService {
       throw new BadRequestException('En pruebas, amount debe ser ≤ 50.00');
     }
 
+    // Crear o encontrar cliente primero
+    let customer = await this.prisma.customer.findFirst({
+      where: {
+        OR: [
+          { email: input.email },
+          { merchantCustomerId: input.merchantCustomerId }
+        ]
+      }
+    });
+
+    if (!customer) {
+      customer = await this.prisma.customer.create({
+        data: {
+          merchantCustomerId: input.merchantCustomerId,
+          email: input.email,
+          givenName: input.givenName,
+          middleName: input.middleName,
+          surname: input.surname,
+        }
+      });
+    }
+
+    // Crear pago inicial en estado pendiente
+    const payment = await this.prisma.payment.create({
+      data: {
+        customer: {
+          connect: {
+            id: customer.id
+          }
+        },
+        paymentType: 'ONE_TIME',
+        merchantTransactionId: input.merchantTransactionId,
+        amount: parseFloat(input.amount),
+        currency: input.currency || 'USD',
+        base0: parseFloat(input.base0),
+        baseImp: parseFloat(input.baseImp),
+        iva: parseFloat(input.iva),
+        status: 'PENDING',
+        gatewayResponse: {},
+        resultCode: 'PENDING',
+        resultDescription: 'Pago iniciado'
+      }
+    });
+
     const params: Record<string,string> = {
       entityId: this.entity(),
       amount: input.amount,
@@ -69,12 +113,46 @@ export class PaymentsService {
     }
   }
 
-  async getPaymentStatus(resourcePath: string) {
+  async getPaymentStatus(resourcePath: string, customerId?: string) {
     const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(this.entity())}`;
     try {
       const res = await firstValueFrom(this.http.get(url, {
         headers: { Authorization: `Bearer ${this.bearer()}` },
       }));
+      
+      const paymentData = res.data;
+      
+      if (paymentData?.merchantTransactionId) {
+        // Buscar el pago existente por merchantTransactionId
+        const existingPayment = await this.prisma.payment.findUnique({
+          where: { merchantTransactionId: paymentData.merchantTransactionId }
+        });
+
+        if (existingPayment) {
+          // Actualizar el pago existente
+          await this.prisma.payment.update({
+            where: { merchantTransactionId: paymentData.merchantTransactionId },
+            data: {
+              gatewayResponse: paymentData,
+              resultCode: paymentData.result.code,
+              resultDescription: paymentData.result.description,
+              resourcePath,
+              status: this.determinePaymentStatus(paymentData.result.code),
+              // Actualizar valores de impuestos si vienen en la respuesta
+              ...(paymentData.customParameters?.['SHOPPER_VAL_BASE0'] && {
+                base0: parseFloat(paymentData.customParameters['SHOPPER_VAL_BASE0'])
+              }),
+              ...(paymentData.customParameters?.['SHOPPER_VAL_BASEIMP'] && {
+                baseImp: parseFloat(paymentData.customParameters['SHOPPER_VAL_BASEIMP'])
+              }),
+              ...(paymentData.customParameters?.['SHOPPER_VAL_IVA'] && {
+                iva: parseFloat(paymentData.customParameters['SHOPPER_VAL_IVA'])
+              })
+            }
+          });
+        }
+      }
+
       return res.data;
     } catch (e: any) {
       const data = e?.response?.data;
@@ -83,7 +161,7 @@ export class PaymentsService {
     }
   }
 
-  async processPaymentCallback(resourcePath: string, data: any) {
+  async processPaymentCallback(resourcePath: string, data: any): Promise<any> {
     try {
       // Obtener estado del pago desde el gateway
       const paymentStatus = await this.getPaymentStatus(resourcePath);
@@ -110,7 +188,7 @@ export class PaymentsService {
       });
 
       return paymentStatus;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException('Error procesando callback de pago: ' + error.message);
     }
   }

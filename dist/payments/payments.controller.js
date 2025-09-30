@@ -88,7 +88,7 @@ let PaymentsController = class PaymentsController {
                 return result;
             }
             else {
-                const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
+                const paymentStatus = await this.svc.getPaymentStatus(resourcePath, customerId);
                 return paymentStatus;
             }
         }

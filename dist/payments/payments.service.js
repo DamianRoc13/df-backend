@@ -30,6 +30,45 @@ let PaymentsService = class PaymentsService {
         if (process.env.TEST_MODE && parseFloat(input.amount) > 50) {
             throw new common_1.BadRequestException('En pruebas, amount debe ser ≤ 50.00');
         }
+        let customer = await this.prisma.customer.findFirst({
+            where: {
+                OR: [
+                    { email: input.email },
+                    { merchantCustomerId: input.merchantCustomerId }
+                ]
+            }
+        });
+        if (!customer) {
+            customer = await this.prisma.customer.create({
+                data: {
+                    merchantCustomerId: input.merchantCustomerId,
+                    email: input.email,
+                    givenName: input.givenName,
+                    middleName: input.middleName,
+                    surname: input.surname,
+                }
+            });
+        }
+        const payment = await this.prisma.payment.create({
+            data: {
+                customer: {
+                    connect: {
+                        id: customer.id
+                    }
+                },
+                paymentType: 'ONE_TIME',
+                merchantTransactionId: input.merchantTransactionId,
+                amount: parseFloat(input.amount),
+                currency: input.currency || 'USD',
+                base0: parseFloat(input.base0),
+                baseImp: parseFloat(input.baseImp),
+                iva: parseFloat(input.iva),
+                status: 'PENDING',
+                gatewayResponse: {},
+                resultCode: 'PENDING',
+                resultDescription: 'Pago iniciado'
+            }
+        });
         const params = {
             entityId: this.entity(),
             amount: input.amount,
@@ -72,17 +111,44 @@ let PaymentsService = class PaymentsService {
             throw new common_1.InternalServerErrorException('Checkout request failed (network/timeout)');
         }
     }
-    async getPaymentStatus(resourcePath) {
-        var _a;
+    async getPaymentStatus(resourcePath, customerId) {
+        var _a, _b, _c, _d;
         const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(this.entity())}`;
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.get(url, {
                 headers: { Authorization: `Bearer ${this.bearer()}` },
             }));
+            const paymentData = res.data;
+            if (paymentData === null || paymentData === void 0 ? void 0 : paymentData.merchantTransactionId) {
+                const existingPayment = await this.prisma.payment.findUnique({
+                    where: { merchantTransactionId: paymentData.merchantTransactionId }
+                });
+                if (existingPayment) {
+                    await this.prisma.payment.update({
+                        where: { merchantTransactionId: paymentData.merchantTransactionId },
+                        data: {
+                            gatewayResponse: paymentData,
+                            resultCode: paymentData.result.code,
+                            resultDescription: paymentData.result.description,
+                            resourcePath,
+                            status: this.determinePaymentStatus(paymentData.result.code),
+                            ...(((_a = paymentData.customParameters) === null || _a === void 0 ? void 0 : _a['SHOPPER_VAL_BASE0']) && {
+                                base0: parseFloat(paymentData.customParameters['SHOPPER_VAL_BASE0'])
+                            }),
+                            ...(((_b = paymentData.customParameters) === null || _b === void 0 ? void 0 : _b['SHOPPER_VAL_BASEIMP']) && {
+                                baseImp: parseFloat(paymentData.customParameters['SHOPPER_VAL_BASEIMP'])
+                            }),
+                            ...(((_c = paymentData.customParameters) === null || _c === void 0 ? void 0 : _c['SHOPPER_VAL_IVA']) && {
+                                iva: parseFloat(paymentData.customParameters['SHOPPER_VAL_IVA'])
+                            })
+                        }
+                    });
+                }
+            }
             return res.data;
         }
         catch (e) {
-            const data = (_a = e === null || e === void 0 ? void 0 : e.response) === null || _a === void 0 ? void 0 : _a.data;
+            const data = (_d = e === null || e === void 0 ? void 0 : e.response) === null || _d === void 0 ? void 0 : _d.data;
             if (data)
                 throw new common_1.BadRequestException({ message: 'Gateway status', gateway: data });
             throw new common_1.InternalServerErrorException('Status request failed (network/timeout)');
