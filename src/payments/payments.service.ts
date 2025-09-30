@@ -4,6 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubscriptionDto, SubscriptionPlanDto } from './dto/create-subscription.dto';
+import { PaymentStatus } from './types/payment-status.enum';
 import * as qs from 'qs';
 
 @Injectable()
@@ -79,6 +80,48 @@ export class PaymentsService {
       const data = e?.response?.data;
       if (data) throw new BadRequestException({ message: 'Gateway status', gateway: data });
       throw new InternalServerErrorException('Status request failed (network/timeout)');
+    }
+  }
+
+  async processPaymentCallback(resourcePath: string, data: any) {
+    try {
+      // Obtener estado del pago desde el gateway
+      const paymentStatus = await this.getPaymentStatus(resourcePath);
+
+      // Buscar el pago por merchantTransactionId
+      const payment = await this.prisma.payment.findUnique({
+        where: { merchantTransactionId: paymentStatus.merchantTransactionId }
+      });
+
+      if (!payment) {
+        throw new NotFoundException('Pago no encontrado en la base de datos');
+      }
+
+      // Actualizar el pago con la respuesta del gateway
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          gatewayResponse: paymentStatus,
+          resultCode: paymentStatus.result.code,
+          resultDescription: paymentStatus.result.description,
+          resourcePath,
+          status: this.determinePaymentStatus(paymentStatus.result.code)
+        }
+      });
+
+      return paymentStatus;
+    } catch (error) {
+      throw new BadRequestException('Error procesando callback de pago: ' + error.message);
+    }
+  }
+
+  private determinePaymentStatus(resultCode: string): PaymentStatus {
+    if (resultCode.startsWith('000.000.') || resultCode.startsWith('000.100.')) {
+      return PaymentStatus.APPROVED;
+    } else if (resultCode.startsWith('000.200.')) {
+      return PaymentStatus.PENDING;
+    } else {
+      return PaymentStatus.REJECTED;
     }
   }
 

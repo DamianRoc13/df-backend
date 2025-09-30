@@ -10,6 +10,8 @@ export declare class PaymentsService {
     private oppUrl;
     createCheckout(input: any): Promise<any>;
     getPaymentStatus(resourcePath: string): Promise<any>;
+    processPaymentCallback(resourcePath: string, data: any): Promise<any>;
+    private determinePaymentStatus;
     createSubscriptionCheckout(dto: CreateSubscriptionDto): Promise<any>;
     completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto): Promise<{
         subscription: {

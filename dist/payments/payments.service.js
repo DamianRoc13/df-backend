@@ -15,6 +15,7 @@ const axios_1 = require("@nestjs/axios");
 const rxjs_1 = require("rxjs");
 const prisma_service_1 = require("../prisma/prisma.service");
 const create_subscription_dto_1 = require("./dto/create-subscription.dto");
+const payment_status_enum_1 = require("./types/payment-status.enum");
 const qs = require("qs");
 let PaymentsService = class PaymentsService {
     constructor(http, prisma) {
@@ -85,6 +86,42 @@ let PaymentsService = class PaymentsService {
             if (data)
                 throw new common_1.BadRequestException({ message: 'Gateway status', gateway: data });
             throw new common_1.InternalServerErrorException('Status request failed (network/timeout)');
+        }
+    }
+    async processPaymentCallback(resourcePath, data) {
+        try {
+            const paymentStatus = await this.getPaymentStatus(resourcePath);
+            const payment = await this.prisma.payment.findUnique({
+                where: { merchantTransactionId: paymentStatus.merchantTransactionId }
+            });
+            if (!payment) {
+                throw new common_1.NotFoundException('Pago no encontrado en la base de datos');
+            }
+            await this.prisma.payment.update({
+                where: { id: payment.id },
+                data: {
+                    gatewayResponse: paymentStatus,
+                    resultCode: paymentStatus.result.code,
+                    resultDescription: paymentStatus.result.description,
+                    resourcePath,
+                    status: this.determinePaymentStatus(paymentStatus.result.code)
+                }
+            });
+            return paymentStatus;
+        }
+        catch (error) {
+            throw new common_1.BadRequestException('Error procesando callback de pago: ' + error.message);
+        }
+    }
+    determinePaymentStatus(resultCode) {
+        if (resultCode.startsWith('000.000.') || resultCode.startsWith('000.100.')) {
+            return payment_status_enum_1.PaymentStatus.APPROVED;
+        }
+        else if (resultCode.startsWith('000.200.')) {
+            return payment_status_enum_1.PaymentStatus.PENDING;
+        }
+        else {
+            return payment_status_enum_1.PaymentStatus.REJECTED;
         }
     }
     async createSubscriptionCheckout(dto) {
