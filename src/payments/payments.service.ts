@@ -46,8 +46,20 @@ export class PaymentsService {
       });
     }
 
-    // Crear pago inicial en estado pendiente
-    const payment = await this.prisma.payment.create({
+    // Verificar si ya existe un pago con este merchantTransactionId
+    let payment = await this.prisma.payment.findUnique({
+      where: { merchantTransactionId: input.merchantTransactionId }
+    });
+
+    // Si existe, generamos un nuevo merchantTransactionId único
+    let merchantTransactionId = input.merchantTransactionId;
+    if (payment) {
+      merchantTransactionId = `${input.merchantTransactionId}_${Date.now()}`;
+      console.log(`⚠️ MerchantTransactionId duplicado, generando nuevo ID: ${merchantTransactionId}`);
+    }
+
+    // Crear nuevo pago
+    payment = await this.prisma.payment.create({
       data: {
         customer: {
           connect: {
@@ -55,7 +67,7 @@ export class PaymentsService {
           }
         },
         paymentType: 'ONE_TIME',
-        merchantTransactionId: input.merchantTransactionId,
+        merchantTransactionId, // Usamos el ID posiblemente modificado
         amount: parseFloat(input.amount),
         currency: input.currency || 'USD',
         base0: parseFloat(input.base0),
@@ -129,10 +141,21 @@ export class PaymentsService {
         });
 
         if (existingPayment) {
-          // Actualizar el pago existente
-          await this.prisma.payment.update({
-            where: { merchantTransactionId: paymentData.merchantTransactionId },
-            data: {
+          // Si es un pago único (ONE_TIME), solo actualizamos el estado y la respuesta
+          if (existingPayment.paymentType === 'ONE_TIME') {
+            await this.prisma.payment.update({
+              where: { id: existingPayment.id }, // Usamos ID en lugar de merchantTransactionId para más seguridad
+              data: {
+                gatewayResponse: paymentData,
+                resultCode: paymentData.result.code,
+                resultDescription: paymentData.result.description,
+                resourcePath,
+                status: this.determinePaymentStatus(paymentData.result.code)
+              }
+            });
+          } else if (existingPayment.paymentType === 'INITIAL' || existingPayment.paymentType === 'RECURRING') {
+            // Para pagos de suscripción, actualizamos todos los campos relevantes
+            const updateData: any = {
               gatewayResponse: paymentData,
               resultCode: paymentData.result.code,
               resultDescription: paymentData.result.description,
@@ -148,8 +171,18 @@ export class PaymentsService {
               ...(paymentData.customParameters?.['SHOPPER_VAL_IVA'] && {
                 iva: parseFloat(paymentData.customParameters['SHOPPER_VAL_IVA'])
               })
-            }
-          });
+            };
+
+            // Solo para pagos de suscripción
+            if (paymentData.tokenId) updateData.tokenId = paymentData.tokenId;
+            if (paymentData.subscriptionId) updateData.subscriptionId = paymentData.subscriptionId;
+
+            // Actualizar el pago
+            await this.prisma.payment.update({
+              where: { id: existingPayment.id }, // Usamos ID en lugar de merchantTransactionId
+              data: updateData
+            });
+          }
         }
       }
 
