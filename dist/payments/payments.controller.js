@@ -57,47 +57,66 @@ let PaymentsController = class PaymentsController {
     }
     async paymentCallback(type, checkoutId, resourcePath, customerId, planType) {
         console.log('🔔 Payment callback recibido:', { type, checkoutId, resourcePath, customerId, planType });
-        if (type === 'subscription') {
-            if (!customerId || !planType) {
-                console.error('❌ Faltan parámetros para suscripción:', { customerId, planType });
-                throw new common_1.BadRequestException('Faltan parámetros requeridos para completar la suscripción: customerId y planType');
-            }
-            const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType);
-            return {
-                success: true,
-                type: 'subscription',
-                message: 'Suscripción configurada exitosamente',
-                data: result
-            };
-        }
-        else {
-            const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
-            return {
-                success: true,
-                type: 'one-time',
-                message: 'Pago procesado',
-                data: paymentStatus
-            };
-        }
-    }
-    async jsonResponse(type, checkoutId, resourcePath, customerId, planType) {
-        console.log('📄 JSON Response solicitado:', { type, checkoutId, resourcePath, customerId, planType });
         try {
-            if (type === 'subscription' && customerId && planType) {
+            if (type === 'subscription') {
+                if (!customerId || !planType) {
+                    console.error('❌ Faltan parámetros para suscripción:', { customerId, planType });
+                    throw new common_1.BadRequestException('Faltan parámetros requeridos para completar la suscripción: customerId y planType');
+                }
                 const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType);
-                return result;
+                const paymentData = await this.svc.getPaymentStatus(resourcePath);
+                paymentData.subscriptionDetails = result;
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+                const encodedData = encodeURIComponent(JSON.stringify(paymentData));
+                return { redirectUrl: `${frontendUrl}/payment-success?payment=${encodedData}` };
             }
             else {
-                const paymentStatus = await this.svc.getPaymentStatus(resourcePath, customerId);
-                return paymentStatus;
+                const paymentStatus = await this.svc.getPaymentStatus(resourcePath);
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+                const encodedData = encodeURIComponent(JSON.stringify(paymentStatus));
+                return { redirectUrl: `${frontendUrl}/payment-success?payment=${encodedData}` };
             }
         }
         catch (error) {
-            return {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+            const errorData = {
                 error: true,
                 message: error.message,
                 details: error
             };
+            const encodedData = encodeURIComponent(JSON.stringify(errorData));
+            return { redirectUrl: `${frontendUrl}/payment-success?payment=${encodedData}` };
+        }
+    }
+    async jsonResponse(response, type, checkoutId, resourcePath, customerId, planType) {
+        console.log('📄 JSON Response solicitado:', { type, checkoutId, resourcePath, customerId, planType });
+        try {
+            let paymentData;
+            if (type === 'subscription' && customerId && planType) {
+                const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType);
+                paymentData = await this.svc.getPaymentStatus(resourcePath);
+                paymentData.subscriptionDetails = result;
+            }
+            else {
+                paymentData = await this.svc.getPaymentStatus(resourcePath, customerId);
+            }
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+            const encodedData = encodeURIComponent(JSON.stringify(paymentData));
+            const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
+            response.redirect(302, redirectUrl);
+        }
+        catch (error) {
+            console.error('❌ Error procesando pago:', error);
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+            const errorData = {
+                error: true,
+                success: false,
+                message: error.message,
+                details: error
+            };
+            const encodedData = encodeURIComponent(JSON.stringify(errorData));
+            const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
+            response.redirect(302, redirectUrl);
         }
     }
 };
@@ -191,13 +210,14 @@ __decorate([
 __decorate([
     (0, common_1.Get)('json-response'),
     (0, swagger_1.ApiOperation)({ summary: 'Endpoint que devuelve JSON puro de la respuesta del pago' }),
-    __param(0, (0, common_1.Query)('type')),
-    __param(1, (0, common_1.Query)('id')),
-    __param(2, (0, common_1.Query)('resourcePath')),
-    __param(3, (0, common_1.Query)('customerId')),
-    __param(4, (0, common_1.Query)('planType')),
+    __param(0, (0, common_1.Res)({ passthrough: false })),
+    __param(1, (0, common_1.Query)('type')),
+    __param(2, (0, common_1.Query)('id')),
+    __param(3, (0, common_1.Query)('resourcePath')),
+    __param(4, (0, common_1.Query)('customerId')),
+    __param(5, (0, common_1.Query)('planType')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "jsonResponse", null);
 exports.PaymentsController = PaymentsController = __decorate([

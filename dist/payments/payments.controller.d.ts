@@ -1,3 +1,4 @@
+import { Response } from 'express';
 import { PaymentsService } from './payments.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
@@ -231,10 +232,7 @@ export declare class PaymentsController {
         maxRetries: number;
     }>;
     paymentCallback(type: string, checkoutId: string, resourcePath: string, customerId?: string, planType?: string): Promise<{
-        success: boolean;
-        type: string;
-        message: string;
-        data: any;
+        redirectUrl: string;
     }>;
-    jsonResponse(type: string, checkoutId: string, resourcePath: string, customerId?: string, planType?: string): Promise<any>;
+    jsonResponse(response: Response, type: string, checkoutId: string, resourcePath: string, customerId?: string, planType?: string): Promise<void>;
 }
