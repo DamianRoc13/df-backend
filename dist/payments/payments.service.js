@@ -55,15 +55,10 @@ let PaymentsService = class PaymentsService {
         let merchantTransactionId = input.merchantTransactionId;
         if (payment) {
             merchantTransactionId = `${input.merchantTransactionId}_${Date.now()}`;
-            console.log(`⚠️ MerchantTransactionId duplicado, generando nuevo ID: ${merchantTransactionId}`);
         }
         payment = await this.prisma.payment.create({
             data: {
-                customer: {
-                    connect: {
-                        id: customer.id
-                    }
-                },
+                customer: { connect: { id: customer.id } },
                 paymentType: 'ONE_TIME',
                 merchantTransactionId,
                 amount: parseFloat(input.amount),
@@ -104,12 +99,7 @@ let PaymentsService = class PaymentsService {
             params['createRegistration'] = 'true';
         (_c = input === null || input === void 0 ? void 0 : input.registrations) === null || _c === void 0 ? void 0 : _c.forEach((id, i) => (params[`registrations[${i}].id`] = id));
         try {
-            const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), {
-                headers: {
-                    Authorization: `Bearer ${this.bearer()}`,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-            }));
+            const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' } }));
             return res.data;
         }
         catch (e) {
@@ -117,6 +107,85 @@ let PaymentsService = class PaymentsService {
             if (data)
                 throw new common_1.BadRequestException({ message: 'Gateway /v1/checkouts', gateway: data });
             throw new common_1.InternalServerErrorException('Checkout request failed (network/timeout)');
+        }
+    }
+    async verifyRecurring(input) {
+        var _a, _b, _c, _d, _e, _f, _g;
+        const { merchantTransactionId, ndc } = input || {};
+        if (!merchantTransactionId && !ndc) {
+            return { success: false, status: 'ERROR', error: 'MISSING_KEYS' };
+        }
+        const payment = await this.prisma.payment.findFirst({
+            where: {
+                OR: [
+                    merchantTransactionId ? { merchantTransactionId } : undefined,
+                    ndc ? { gatewayResponse: { path: ['ndc'], equals: ndc } } : undefined,
+                ].filter(Boolean),
+            },
+        });
+        const isApprovedInDb = !!payment &&
+            (payment.status === 'APPROVED' ||
+                (typeof payment.resultCode === 'string' && payment.resultCode.startsWith('000.')));
+        if (isApprovedInDb) {
+            const subscription = payment.subscriptionId
+                ? await this.prisma.subscription.findUnique({ where: { id: payment.subscriptionId } })
+                : undefined;
+            const paymentToken = payment.tokenId
+                ? await this.prisma.paymentToken.findUnique({ where: { id: payment.tokenId } })
+                : undefined;
+            return {
+                success: true,
+                status: 'APPROVED',
+                resultCode: payment.resultCode,
+                resultDescription: payment.resultDescription,
+                payment,
+                subscription,
+                paymentToken,
+            };
+        }
+        try {
+            const gw = await this.getPaymentStatusSafe(ndc || merchantTransactionId || '');
+            if (((_a = gw === null || gw === void 0 ? void 0 : gw.result) === null || _a === void 0 ? void 0 : _a.code) && String(gw.result.code).startsWith('000.')) {
+                return {
+                    success: true,
+                    status: 'APPROVED',
+                    resultCode: gw.result.code,
+                    resultDescription: gw.result.description,
+                    payment: { gatewayResponse: gw },
+                };
+            }
+            const code = ((_b = gw === null || gw === void 0 ? void 0 : gw.result) === null || _b === void 0 ? void 0 : _b.code) ? String(gw.result.code) : '';
+            const isPendingWrapper = code.startsWith('200.');
+            return {
+                success: false,
+                status: isPendingWrapper ? 'PENDING' : 'PENDING',
+                gateway: gw,
+            };
+        }
+        catch (e) {
+            const code = ((_e = (_d = (_c = e === null || e === void 0 ? void 0 : e.response) === null || _c === void 0 ? void 0 : _c.gateway) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.code) || ((_f = e === null || e === void 0 ? void 0 : e.result) === null || _f === void 0 ? void 0 : _f.code) || '';
+            if (String(code).startsWith('200.')) {
+                return {
+                    success: false,
+                    status: 'PENDING',
+                    gateway: ((_g = e === null || e === void 0 ? void 0 : e.response) === null || _g === void 0 ? void 0 : _g.gateway) || (e === null || e === void 0 ? void 0 : e.gateway) || { result: { code } },
+                };
+            }
+            return { success: false, status: 'ERROR', error: 'VERIFY_FAILED' };
+        }
+    }
+    async getPaymentStatusSafe(idOrNdc) {
+        var _a, _b, _c, _d, _e;
+        try {
+            const data = await this.getPaymentStatus(idOrNdc);
+            return data;
+        }
+        catch (e) {
+            const code = ((_c = (_b = (_a = e === null || e === void 0 ? void 0 : e.response) === null || _a === void 0 ? void 0 : _a.gateway) === null || _b === void 0 ? void 0 : _b.result) === null || _c === void 0 ? void 0 : _c.code) || ((_d = e === null || e === void 0 ? void 0 : e.result) === null || _d === void 0 ? void 0 : _d.code) || '';
+            if (String(code).startsWith('200.')) {
+                return ((_e = e === null || e === void 0 ? void 0 : e.response) === null || _e === void 0 ? void 0 : _e.gateway) || (e === null || e === void 0 ? void 0 : e.gateway) || { result: { code } };
+            }
+            throw e;
         }
     }
     async getPaymentStatus(resourcePath, customerId) {
@@ -218,7 +287,7 @@ let PaymentsService = class PaymentsService {
         }
     }
     async createSubscriptionCheckout(dto) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const planPrices = {
             [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: '77.00',
             [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: '19.99',
@@ -249,7 +318,7 @@ let PaymentsService = class PaymentsService {
             entityId: this.entity(),
             amount,
             currency: 'USD',
-            'paymentType': 'DB',
+            paymentType: 'DB',
             'customer.givenName': dto.givenName,
             'customer.middleName': dto.middleName,
             'customer.surname': dto.surname,
@@ -271,18 +340,7 @@ let PaymentsService = class PaymentsService {
         if (process.env.TEST_MODE)
             params['testMode'] = process.env.TEST_MODE;
         try {
-            console.log('🚀 Iniciando creación de checkout para suscripción');
-            console.log('📊 URL base:', process.env.OPPWA_URL);
-            console.log('🔑 Entity ID:', this.entity());
-            console.log('💳 Parámetros:', JSON.stringify(params, null, 2));
-            const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), {
-                headers: {
-                    Authorization: `Bearer ${this.bearer()}`,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                timeout: 30000,
-            }));
-            console.log('✅ Respuesta del gateway:', JSON.stringify(res.data, null, 2));
+            const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000 }));
             try {
                 await this.prisma.payment.create({
                     data: {
@@ -301,11 +359,9 @@ let PaymentsService = class PaymentsService {
                         status: 'PENDING'
                     }
                 });
-                console.log('💾 Registro de pago inicial creado exitosamente');
             }
             catch (dbError) {
                 if (dbError.code === 'P2002' && ((_d = (_c = dbError.meta) === null || _c === void 0 ? void 0 : _c.target) === null || _d === void 0 ? void 0 : _d.includes('merchantTransactionId'))) {
-                    console.log('⚠️ MerchantTransactionId duplicado, actualizando registro existente');
                     await this.prisma.payment.update({
                         where: { merchantTransactionId: dto.merchantTransactionId },
                         data: {
@@ -317,10 +373,8 @@ let PaymentsService = class PaymentsService {
                             updatedAt: new Date()
                         }
                     });
-                    console.log('✅ Registro de pago actualizado');
                 }
                 else {
-                    console.error('❌ Error de base de datos:', dbError);
                     throw dbError;
                 }
             }
@@ -331,23 +385,12 @@ let PaymentsService = class PaymentsService {
             };
         }
         catch (e) {
-            console.error('❌ Error en createSubscriptionCheckout:', e.message);
-            console.error('🔍 Detalles del error:', {
-                status: (_g = e === null || e === void 0 ? void 0 : e.response) === null || _g === void 0 ? void 0 : _g.status,
-                statusText: (_h = e === null || e === void 0 ? void 0 : e.response) === null || _h === void 0 ? void 0 : _h.statusText,
-                data: (_j = e === null || e === void 0 ? void 0 : e.response) === null || _j === void 0 ? void 0 : _j.data,
-                config: {
-                    url: (_k = e === null || e === void 0 ? void 0 : e.config) === null || _k === void 0 ? void 0 : _k.url,
-                    method: (_l = e === null || e === void 0 ? void 0 : e.config) === null || _l === void 0 ? void 0 : _l.method,
-                    timeout: (_m = e === null || e === void 0 ? void 0 : e.config) === null || _m === void 0 ? void 0 : _m.timeout
-                }
-            });
-            const data = (_o = e === null || e === void 0 ? void 0 : e.response) === null || _o === void 0 ? void 0 : _o.data;
+            const data = (_g = e === null || e === void 0 ? void 0 : e.response) === null || _g === void 0 ? void 0 : _g.data;
             if (data)
                 throw new common_1.BadRequestException({
                     message: 'Gateway /v1/checkouts subscription error',
                     gateway: data,
-                    status: (_p = e === null || e === void 0 ? void 0 : e.response) === null || _p === void 0 ? void 0 : _p.status
+                    status: (_h = e === null || e === void 0 ? void 0 : e.response) === null || _h === void 0 ? void 0 : _h.status
                 });
             if (e.code === 'ECONNABORTED' || e.message.includes('timeout')) {
                 throw new common_1.InternalServerErrorException({
@@ -364,45 +407,33 @@ let PaymentsService = class PaymentsService {
         }
     }
     async completeSubscriptionSetup(resourcePath, customerId, planType) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
-        console.log('🔄 Iniciando completeSubscriptionSetup:', { resourcePath, customerId, planType });
+        var _a, _b, _c, _d, _e, _f;
         const paymentResult = await this.getPaymentStatus(resourcePath);
-        console.log('📊 Respuesta del pago:', JSON.stringify(paymentResult, null, 2));
         const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
         const isSuccess = successCodes.includes((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code);
-        console.log('✅ Pago exitoso:', isSuccess, 'Code:', (_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.code);
         if (!isSuccess) {
             throw new common_1.BadRequestException({
                 message: 'Pago inicial no exitoso',
                 result: paymentResult.result
             });
         }
-        console.log('🎫 Buscando token en la respuesta del pago (modalidad "En el momento de la transacción")...');
-        console.log('📊 Respuesta completa para búsqueda de token:', JSON.stringify(paymentResult, null, 2));
         let tokenData;
         if (paymentResult.registrations && paymentResult.registrations.length > 0) {
             tokenData = paymentResult.registrations[0];
-            console.log('🎫 Token encontrado en registrations:', JSON.stringify(tokenData, null, 2));
         }
         else if (paymentResult.registrationId) {
-            console.log('🎫 Token encontrado como registrationId:', paymentResult.registrationId);
             tokenData = { id: paymentResult.registrationId };
         }
-        else if ((_c = paymentResult.card) === null || _c === void 0 ? void 0 : _c.registrationId) {
-            console.log('🎫 Token encontrado en card.registrationId:', paymentResult.card.registrationId);
+        else if ((_b = paymentResult.card) === null || _b === void 0 ? void 0 : _b.registrationId) {
             tokenData = { id: paymentResult.card.registrationId };
         }
         else {
-            console.log('🔍 Buscando token en todas las propiedades...');
-            const searchForToken = (obj, path = '') => {
-                for (const [key, value] of Object.entries(obj)) {
-                    const currentPath = path ? `${path}.${key}` : key;
-                    if (typeof value === 'string' && value.match(/^[a-f0-9]{32}$/i)) {
-                        console.log(`🎫 Posible token encontrado en ${currentPath}:`, value);
+            const searchForToken = (obj) => {
+                for (const [, value] of Object.entries(obj)) {
+                    if (typeof value === 'string' && value.match(/^[a-f0-9]{32}$/i))
                         return value;
-                    }
-                    else if (typeof value === 'object' && value !== null) {
-                        const found = searchForToken(value, currentPath);
+                    if (typeof value === 'object' && value !== null) {
+                        const found = searchForToken(value);
                         if (found)
                             return found;
                     }
@@ -410,44 +441,34 @@ let PaymentsService = class PaymentsService {
                 return null;
             };
             const foundToken = searchForToken(paymentResult);
-            if (foundToken) {
+            if (foundToken)
                 tokenData = { id: foundToken };
-                console.log('✅ Token encontrado mediante búsqueda:', foundToken);
-            }
         }
         if (!(tokenData === null || tokenData === void 0 ? void 0 : tokenData.id)) {
-            console.error('❌ No se encontró token en la respuesta del pago');
-            console.error('🔍 Campos disponibles en la respuesta:', Object.keys(paymentResult));
             throw new common_1.BadRequestException({
                 message: 'No se pudo obtener el token de pago con recurringType=INITIAL',
                 details: {
                     resourcePath,
                     availableFields: Object.keys(paymentResult),
                     hasRegistrations: !!paymentResult.registrations,
-                    registrationsLength: ((_d = paymentResult.registrations) === null || _d === void 0 ? void 0 : _d.length) || 0
+                    registrationsLength: ((_c = paymentResult.registrations) === null || _c === void 0 ? void 0 : _c.length) || 0
                 }
             });
         }
         const merchantTxnId = paymentResult.merchantTransactionId;
-        console.log('🔍 Buscando pago por merchantTransactionId:', merchantTxnId);
         let payment = await this.prisma.payment.findFirst({
             where: { merchantTransactionId: merchantTxnId },
             include: { customer: true }
         });
         if (!payment) {
-            console.log('⚠️ Pago no encontrado por merchantTransactionId, intentando por resourcePath...');
             payment = await this.prisma.payment.findFirst({
                 where: { resourcePath },
                 include: { customer: true }
             });
         }
         if (!payment) {
-            console.error('❌ Pago no encontrado en BD');
-            console.error('🔍 Búsqueda por merchantTransactionId:', merchantTxnId);
-            console.error('🔍 Búsqueda por resourcePath:', resourcePath);
             throw new common_1.NotFoundException(`Pago no encontrado para merchantTransactionId: ${merchantTxnId} o resourcePath: ${resourcePath}`);
         }
-        console.log('📄 Pago encontrado en BD:', payment.id);
         await this.prisma.payment.update({
             where: { id: payment.id },
             data: {
@@ -457,128 +478,79 @@ let PaymentsService = class PaymentsService {
                 status: 'APPROVED'
             }
         });
-        console.log('💾 Actualizando pago en BD');
         const tokenToSave = tokenData.id;
         const customerIdFromPayment = payment.customerId;
-        console.log('🎫 Preparando datos del token:', {
-            tokenToSave,
-            customerIdFromPayment,
-            customerId,
-            relatedPaymentId: payment.id,
-            brand: paymentResult.paymentBrand,
-            last4: (_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.last4Digits,
-            expiryMonth: (_f = paymentResult.card) === null || _f === void 0 ? void 0 : _f.expiryMonth,
-            expiryYear: (_g = paymentResult.card) === null || _g === void 0 ? void 0 : _g.expiryYear
-        });
-        try {
-            const paymentToken = await this.prisma.paymentToken.create({
-                data: {
-                    customerId: customerIdFromPayment,
-                    token: tokenToSave,
-                    brand: paymentResult.paymentBrand || 'UNKNOWN',
-                    last4: ((_h = paymentResult.card) === null || _h === void 0 ? void 0 : _h.last4Digits) || '0000',
-                    expiryMonth: parseInt(((_j = paymentResult.card) === null || _j === void 0 ? void 0 : _j.expiryMonth) || '12'),
-                    expiryYear: parseInt(((_k = paymentResult.card) === null || _k === void 0 ? void 0 : _k.expiryYear) || '2030'),
-                    isActive: true
-                }
-            });
-            console.log('✅ Token guardado exitosamente en BD:', {
-                tokenId: paymentToken.id,
-                token: tokenToSave,
+        const paymentToken = await this.prisma.paymentToken.create({
+            data: {
                 customerId: customerIdFromPayment,
-                relatedPaymentId: payment.id
-            });
-            await this.prisma.payment.update({
-                where: { id: payment.id },
-                data: { tokenId: paymentToken.id }
-            });
-            console.log('✅ Pago actualizado con tokenId:', paymentToken.id);
-            const nextBillingDate = new Date();
-            nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-            const planPrices = {
-                [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 77.00,
-                [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 19.99,
-                [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 1.00
-            };
-            console.log('📅 Creando suscripción:', {
+                token: tokenToSave,
+                brand: paymentResult.paymentBrand || 'UNKNOWN',
+                last4: ((_d = paymentResult.card) === null || _d === void 0 ? void 0 : _d.last4Digits) || '0000',
+                expiryMonth: parseInt(((_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.expiryMonth) || '12'),
+                expiryYear: parseInt(((_f = paymentResult.card) === null || _f === void 0 ? void 0 : _f.expiryYear) || '2030'),
+                isActive: true
+            }
+        });
+        await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { tokenId: paymentToken.id }
+        });
+        const nextBillingDate = new Date();
+        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+        const planPrices = {
+            [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 77.00,
+            [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 19.99,
+            [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 1.00
+        };
+        const subscription = await this.prisma.subscription.create({
+            data: {
                 customerId: customerIdFromPayment,
                 tokenId: paymentToken.id,
                 planType,
                 amount: planPrices[planType],
-                nextBillingDate
-            });
-            const subscription = await this.prisma.subscription.create({
-                data: {
-                    customerId: customerIdFromPayment,
-                    tokenId: paymentToken.id,
-                    planType,
-                    amount: planPrices[planType],
-                    nextBillingDate,
-                    lastBillingDate: new Date(),
-                    status: 'ACTIVE'
-                }
-            });
-            console.log('🎉 Suscripción creada exitosamente:', {
+                nextBillingDate,
+                lastBillingDate: new Date(),
+                status: 'ACTIVE'
+            }
+        });
+        await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: {
                 subscriptionId: subscription.id,
-                customerId: customerIdFromPayment,
-                tokenId: paymentToken.id,
-                planType,
-                amount: planPrices[planType]
-            });
-            await this.prisma.payment.update({
-                where: { id: payment.id },
-                data: {
-                    subscriptionId: subscription.id,
-                    paymentType: 'INITIAL',
-                    status: 'APPROVED',
-                    resultCode: paymentResult.result.code,
-                    resultDescription: paymentResult.result.description,
-                    updatedAt: new Date()
-                }
-            });
-            console.log('✅ Pago inicial actualizado con subscriptionId:', subscription.id);
-            const completeSubscription = await this.prisma.subscription.findUnique({
-                where: { id: subscription.id },
-                include: {
-                    customer: true,
-                    token: true,
-                    payments: {
-                        orderBy: {
-                            createdAt: 'asc'
-                        }
-                    }
-                }
-            });
-            return {
-                subscription: completeSubscription,
-                paymentToken,
-                paymentResult,
-                customerId: customerIdFromPayment
-            };
-        }
-        catch (error) {
-            console.error('❌ Error en el proceso de tokenización/suscripción:', error);
-            throw new common_1.InternalServerErrorException(`Error en el proceso: ${error.message}`);
-        }
+                paymentType: 'INITIAL',
+                status: 'APPROVED',
+                resultCode: paymentResult.result.code,
+                resultDescription: paymentResult.result.description,
+                updatedAt: new Date()
+            }
+        });
+        const completeSubscription = await this.prisma.subscription.findUnique({
+            where: { id: subscription.id },
+            include: {
+                customer: true,
+                token: true,
+                payments: { orderBy: { createdAt: 'asc' } }
+            }
+        });
+        return {
+            subscription: completeSubscription,
+            paymentToken,
+            paymentResult,
+            customerId: customerIdFromPayment
+        };
     }
     async processRecurringPayment(subscriptionId) {
         var _a, _b, _c, _d;
         const subscription = await this.prisma.subscription.findUnique({
             where: { id: subscriptionId },
-            include: {
-                token: true,
-                customer: true
-            }
+            include: { token: true, customer: true }
         });
-        if (!subscription) {
+        if (!subscription)
             throw new common_1.NotFoundException('Suscripción no encontrada');
-        }
-        if (subscription.status !== 'ACTIVE') {
+        if (subscription.status !== 'ACTIVE')
             throw new common_1.BadRequestException('Suscripción no está activa');
-        }
-        if (!subscription.token.isActive) {
+        if (!subscription.token.isActive)
             throw new common_1.BadRequestException('Token de pago no está activo');
-        }
         const amount = subscription.amount.toNumber();
         const taxRate = 0.12;
         const baseImp = amount / (1 + taxRate);
@@ -605,12 +577,7 @@ let PaymentsService = class PaymentsService {
         if (process.env.TEST_MODE)
             params['testMode'] = process.env.TEST_MODE;
         try {
-            const res = await (0, rxjs_1.firstValueFrom)(this.http.post(`/v1/registrations/${subscription.token.token}/payments`, qs.stringify(params), {
-                headers: {
-                    Authorization: `Bearer ${this.bearer()}`,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-            }));
+            const res = await (0, rxjs_1.firstValueFrom)(this.http.post(`/v1/registrations/${subscription.token.token}/payments`, qs.stringify(params), { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' } }));
             const paymentResult = res.data;
             const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
             const isSuccess = successCodes.includes((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code);
@@ -638,22 +605,14 @@ let PaymentsService = class PaymentsService {
                     resultDescription: `${(_c = paymentResult.result) === null || _c === void 0 ? void 0 : _c.description} (Intento ${subscription.failedAttempts + 1})`,
                     status: isSuccess ? 'APPROVED' : 'REJECTED'
                 },
-                include: {
-                    subscription: true,
-                    token: true,
-                    customer: true
-                }
+                include: { subscription: true, token: true, customer: true }
             });
             if (isSuccess) {
                 const nextBillingDate = new Date(subscription.nextBillingDate);
                 nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
                 await this.prisma.subscription.update({
                     where: { id: subscriptionId },
-                    data: {
-                        lastBillingDate: new Date(),
-                        nextBillingDate,
-                        failedAttempts: 0
-                    }
+                    data: { lastBillingDate: new Date(), nextBillingDate, failedAttempts: 0 }
                 });
             }
             else {
@@ -661,27 +620,17 @@ let PaymentsService = class PaymentsService {
                 const shouldCancel = failedAttempts >= subscription.maxRetries;
                 await this.prisma.subscription.update({
                     where: { id: subscriptionId },
-                    data: {
-                        failedAttempts,
-                        status: shouldCancel ? 'FAILED' : 'ACTIVE'
-                    }
+                    data: { failedAttempts, status: shouldCancel ? 'FAILED' : 'ACTIVE' }
                 });
             }
-            return {
-                payment,
-                paymentResult,
-                success: isSuccess
-            };
+            return { payment, paymentResult, success: isSuccess };
         }
         catch (e) {
             const failedAttempts = subscription.failedAttempts + 1;
             const shouldCancel = failedAttempts >= subscription.maxRetries;
             await this.prisma.subscription.update({
                 where: { id: subscriptionId },
-                data: {
-                    failedAttempts,
-                    status: shouldCancel ? 'FAILED' : 'ACTIVE'
-                }
+                data: { failedAttempts, status: shouldCancel ? 'FAILED' : 'ACTIVE' }
             });
             const data = (_d = e === null || e === void 0 ? void 0 : e.response) === null || _d === void 0 ? void 0 : _d.data;
             if (data)
@@ -694,17 +643,10 @@ let PaymentsService = class PaymentsService {
         return this.prisma.subscription.findMany({
             where: {
                 status: 'ACTIVE',
-                nextBillingDate: {
-                    lte: now
-                },
-                failedAttempts: {
-                    lt: 3
-                }
+                nextBillingDate: { lte: now },
+                failedAttempts: { lt: 3 }
             },
-            include: {
-                customer: true,
-                token: true
-            }
+            include: { customer: true, token: true }
         });
     }
     async pauseSubscription(subscriptionId) {
@@ -722,10 +664,7 @@ let PaymentsService = class PaymentsService {
     async resumeSubscription(subscriptionId) {
         return this.prisma.subscription.update({
             where: { id: subscriptionId },
-            data: {
-                status: 'ACTIVE',
-                failedAttempts: 0
-            }
+            data: { status: 'ACTIVE', failedAttempts: 0 }
         });
     }
 };
