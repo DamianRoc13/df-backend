@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: df-backend-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: df-backend-app
+    environment:
+      - OPPWA_URL=${OPPWA_URL}
+      - OPPWA_ENTITY_ID=${OPPWA_ENTITY_ID}
+      - OPPWA_BEARER=${OPPWA_BEARER}
+      - MID=${MID}
+      - TID=${TID}
+      - MERCHANT_NAME=${MERCHANT_NAME}
+      - PORT=${PORT:-3000}
+      - DATABASE_URL=${DATABASE_URL}
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
