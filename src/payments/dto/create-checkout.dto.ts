@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumberString, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsNumberString, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class CreateCheckoutDto {
   @ApiProperty({ example: '12.34' }) @IsNumberString() amount!: string;
@@ -11,6 +11,7 @@ export class CreateCheckoutDto {
   @ApiProperty({ example: 'Juan' }) @Length(3,48) givenName!: string;        // customer.givenName
   @ApiProperty({ example: 'Pablo' }) @Length(2,50) middleName!: string;      // customer.middleName
   @ApiProperty({ example: 'Pérez' }) @Length(3,48) surname!: string;         // customer.surname
+  @ApiProperty({ example: 'juan.perez@email.com' }) @IsEmail() email!: string; // customer.email
 
   // IP real del cliente
   @ApiProperty({ example: '181.39.XX.XX' }) @IsString() customerIp!: string; // customer.ip
