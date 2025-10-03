@@ -103,6 +103,7 @@ export declare class PaymentsService {
     getPaymentStatus(resourcePath: string, customerId?: string): Promise<any>;
     processPaymentCallback(resourcePath: string, data: any): Promise<any>;
     private determinePaymentStatus;
+    private waitForPaymentCompletion;
     createSubscriptionCheckout(dto: CreateSubscriptionDto): Promise<any>;
     completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto): Promise<{
         subscription: {

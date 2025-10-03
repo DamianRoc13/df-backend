@@ -279,12 +279,50 @@ let PaymentsService = class PaymentsService {
         if (resultCode.startsWith('000.000.') || resultCode.startsWith('000.100.')) {
             return payment_status_enum_1.PaymentStatus.APPROVED;
         }
-        else if (resultCode.startsWith('000.200.')) {
+        else if (resultCode.startsWith('000.200.') || resultCode.startsWith('200.')) {
             return payment_status_enum_1.PaymentStatus.PENDING;
         }
         else {
             return payment_status_enum_1.PaymentStatus.REJECTED;
         }
+    }
+    async waitForPaymentCompletion(resourcePath, maxAttempts = 10, delayMs = 2000) {
+        var _a, _b, _c, _d;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                const paymentResult = await this.getPaymentStatus(resourcePath);
+                const resultCode = ((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code) || '';
+                if (resultCode.startsWith('200.') || resultCode.startsWith('000.200.')) {
+                    console.log(`[Intento ${attempt}/${maxAttempts}] Pago pendiente (${resultCode}), esperando...`);
+                    if (attempt < maxAttempts) {
+                        await new Promise(resolve => setTimeout(resolve, delayMs));
+                        continue;
+                    }
+                    else {
+                        throw new common_1.BadRequestException({
+                            message: 'El pago sigue en proceso después de múltiples intentos',
+                            code: resultCode,
+                            attempts: maxAttempts
+                        });
+                    }
+                }
+                console.log(`[Intento ${attempt}/${maxAttempts}] Pago completado con código: ${resultCode}`);
+                return paymentResult;
+            }
+            catch (error) {
+                if (attempt === maxAttempts) {
+                    throw error;
+                }
+                const errorCode = ((_d = (_c = (_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.gateway) === null || _c === void 0 ? void 0 : _c.result) === null || _d === void 0 ? void 0 : _d.code) || '';
+                if (errorCode.startsWith('200.') || errorCode.startsWith('000.200.')) {
+                    console.log(`[Intento ${attempt}/${maxAttempts}] Error pendiente, reintentando...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                    continue;
+                }
+                throw error;
+            }
+        }
+        throw new common_1.BadRequestException('No se pudo completar la verificación del pago');
     }
     async createSubscriptionCheckout(dto) {
         var _a, _b, _c, _d, _e, _f, _g, _h;
@@ -408,7 +446,8 @@ let PaymentsService = class PaymentsService {
     }
     async completeSubscriptionSetup(resourcePath, customerId, planType) {
         var _a, _b, _c, _d, _e, _f;
-        const paymentResult = await this.getPaymentStatus(resourcePath);
+        console.log(`[completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
+        const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000);
         const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
         const isSuccess = successCodes.includes((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code);
         if (!isSuccess) {

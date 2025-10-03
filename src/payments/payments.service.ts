@@ -283,11 +283,70 @@ export class PaymentsService {
   private determinePaymentStatus(resultCode: string): PaymentStatus {
     if (resultCode.startsWith('000.000.') || resultCode.startsWith('000.100.')) {
       return PaymentStatus.APPROVED;
-    } else if (resultCode.startsWith('000.200.')) {
+    } else if (resultCode.startsWith('000.200.') || resultCode.startsWith('200.')) {
       return PaymentStatus.PENDING;
     } else {
       return PaymentStatus.REJECTED;
     }
+  }
+
+  /**
+   * Espera a que el pago se complete (aprobado o rechazado) haciendo polling
+   * Útil para pagos recurrentes que pueden devolver 200.xxx inicialmente
+   */
+  private async waitForPaymentCompletion(
+    resourcePath: string,
+    maxAttempts: number = 10,
+    delayMs: number = 2000
+  ): Promise<any> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const paymentResult = await this.getPaymentStatus(resourcePath);
+        const resultCode = paymentResult.result?.code || '';
+        
+        // Si el código empieza con 200. o 000.200., está pendiente - seguir esperando
+        if (resultCode.startsWith('200.') || resultCode.startsWith('000.200.')) {
+          console.log(`[Intento ${attempt}/${maxAttempts}] Pago pendiente (${resultCode}), esperando...`);
+          
+          // Si no es el último intento, esperar antes de reintentar
+          if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          } else {
+            // Último intento y sigue pendiente
+            throw new BadRequestException({
+              message: 'El pago sigue en proceso después de múltiples intentos',
+              code: resultCode,
+              attempts: maxAttempts
+            });
+          }
+        }
+        
+        // Si llegamos aquí, el pago ya tiene un estado definitivo (aprobado o rechazado)
+        console.log(`[Intento ${attempt}/${maxAttempts}] Pago completado con código: ${resultCode}`);
+        return paymentResult;
+        
+      } catch (error) {
+        // Si es el último intento o un error diferente a pending, propagar el error
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+        
+        // Si es un error de pendiente, continuar esperando
+        const errorCode = (error as any)?.response?.gateway?.result?.code || '';
+        if (errorCode.startsWith('200.') || errorCode.startsWith('000.200.')) {
+          console.log(`[Intento ${attempt}/${maxAttempts}] Error pendiente, reintentando...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+        
+        // Otro tipo de error, propagar
+        throw error;
+      }
+    }
+    
+    // No debería llegar aquí, pero por si acaso
+    throw new BadRequestException('No se pudo completar la verificación del pago');
   }
 
   async createSubscriptionCheckout(dto: CreateSubscriptionDto) {
@@ -416,9 +475,13 @@ export class PaymentsService {
   }
 
   async completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto) {
-    const paymentResult = await this.getPaymentStatus(resourcePath);
+    // Esperar a que el pago se complete (con reintentos para manejar códigos 200.xxx)
+    console.log(`[completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
+    const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000);
+    
     const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
     const isSuccess = successCodes.includes(paymentResult.result?.code);
+    
     if (!isSuccess) {
       throw new BadRequestException({
         message: 'Pago inicial no exitoso',
