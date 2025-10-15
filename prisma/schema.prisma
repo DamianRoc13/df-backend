@@ -12,14 +12,25 @@ datasource db {
 
 // Clientes del sistema
 model Customer {
-  id                 String   @id @default(cuid())
-  merchantCustomerId String   @unique // ID que enviamos al gateway
-  email              String   @unique
+  id                 String @id @default(cuid())
+  merchantCustomerId String @unique // ID que enviamos al gateway
+  email              String @unique
   givenName          String
   middleName         String
   surname            String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+
+  // Campos obligatorios Fase 2 DataFast
+  identificationDocType String // IDCARD, PASSPORT, etc.
+  identificationDocId   String // Número de cédula/documento
+  phone                 String // Teléfono o celular
+  street1               String // Dirección/Calle
+  city                  String // Ciudad
+  state                 String // Provincia/Estado
+  country               String // Código de país (ej: EC)
+  postcode              String // Código postal
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relaciones
   subscriptions Subscription[]

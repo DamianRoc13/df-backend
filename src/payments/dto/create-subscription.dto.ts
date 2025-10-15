@@ -56,4 +56,40 @@ export class CreateSubscriptionDto {
   @ApiProperty({ example: '8.25' }) 
   @Matches(/^\d+(\.\d{1,2})?$/) 
   iva!: string;
+
+  // Identificación (Fase 2 - Obligatorio DataFast)
+  @ApiProperty({ example: 'IDCARD', description: 'Tipo de documento: IDCARD, PASSPORT, etc.' }) 
+  @IsString() 
+  identificationDocType!: string;
+
+  @ApiProperty({ example: '1234567890', description: 'Número de cédula/documento' }) 
+  @IsString() 
+  identificationDocId!: string;
+
+  // Teléfono (Fase 2 - Obligatorio DataFast)
+  @ApiProperty({ example: '+593987654321', description: 'Teléfono o celular del cliente' }) 
+  @IsString() 
+  phone!: string;
+
+  // Dirección (Fase 2 - Obligatorio DataFast)
+  @ApiProperty({ example: 'Av. Amazonas N123', description: 'Dirección/Calle' }) 
+  @IsString() 
+  street1!: string;
+
+  @ApiProperty({ example: 'Quito', description: 'Ciudad' }) 
+  @IsString() 
+  city!: string;
+
+  @ApiProperty({ example: 'Pichincha', description: 'Provincia/Estado' }) 
+  @IsString() 
+  state!: string;
+
+  @ApiProperty({ example: 'EC', description: 'Código de país (ISO)' }) 
+  @IsString() 
+  @Length(2, 2)
+  country!: string;
+
+  @ApiProperty({ example: '170515', description: 'Código postal' }) 
+  @IsString() 
+  postcode!: string;
 }

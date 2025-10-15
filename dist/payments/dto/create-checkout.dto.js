@@ -55,6 +55,11 @@ __decorate([
     __metadata("design:type", String)
 ], CreateCheckoutDto.prototype, "surname", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'juan.perez@email.com' }),
+    (0, class_validator_1.IsEmail)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "email", void 0);
+__decorate([
     (0, swagger_1.ApiProperty)({ example: '181.39.XX.XX' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -79,6 +84,47 @@ __decorate([
     (0, class_validator_1.Matches)(/^\d+(\.\d{1,2})?$/),
     __metadata("design:type", String)
 ], CreateCheckoutDto.prototype, "iva", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'IDCARD', description: 'Tipo de documento: IDCARD, PASSPORT, etc.' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "identificationDocType", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '1234567890', description: 'Número de cédula/documento' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "identificationDocId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '+593987654321', description: 'Teléfono o celular del cliente' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "phone", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Av. Amazonas N123', description: 'Dirección/Calle' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "street1", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Quito', description: 'Ciudad' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "city", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Pichincha', description: 'Provincia/Estado' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "state", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'EC', description: 'Código de país (ISO)' }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(2, 2),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "country", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '170515', description: 'Código postal' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateCheckoutDto.prototype, "postcode", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ required: false }),
     (0, class_validator_1.IsOptional)(),

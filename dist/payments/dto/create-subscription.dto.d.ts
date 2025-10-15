@@ -15,4 +15,12 @@ export declare class CreateSubscriptionDto {
     base0: string;
     baseImp: string;
     iva: string;
+    identificationDocType: string;
+    identificationDocId: string;
+    phone: string;
+    street1: string;
+    city: string;
+    state: string;
+    country: string;
+    postcode: string;
 }

@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "public"."customers" ALTER COLUMN "city" DROP NOT NULL,
+ALTER COLUMN "country" DROP NOT NULL,
+ALTER COLUMN "postcode" DROP NOT NULL,
+ALTER COLUMN "state" DROP NOT NULL;

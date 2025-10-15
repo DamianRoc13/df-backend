@@ -26,7 +26,7 @@ let PaymentsService = class PaymentsService {
     entity() { return (process.env.OPPWA_ENTITY_ID || '').trim(); }
     oppUrl() { return (process.env.OPPWA_URL || '').trim(); }
     async createCheckout(input) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e;
         if (process.env.TEST_MODE && parseFloat(input.amount) > 50) {
             throw new common_1.BadRequestException('En pruebas, amount debe ser ≤ 50.00');
         }
@@ -46,6 +46,14 @@ let PaymentsService = class PaymentsService {
                     givenName: input.givenName,
                     middleName: input.middleName,
                     surname: input.surname,
+                    identificationDocType: input.identificationDocType,
+                    identificationDocId: input.identificationDocId,
+                    phone: input.phone,
+                    street1: input.street1,
+                    city: input.city,
+                    state: input.state,
+                    country: input.country,
+                    postcode: input.postcode,
                 }
             });
         }
@@ -80,9 +88,21 @@ let PaymentsService = class PaymentsService {
             'customer.givenName': input.givenName,
             'customer.middleName': input.middleName,
             'customer.surname': input.surname,
+            'customer.email': input.email,
             'customer.ip': input.customerIp,
+            'customer.identificationDocType': input.identificationDocType,
+            'customer.identificationDocId': input.identificationDocId,
+            'customer.phone': input.phone,
             'merchantTransactionId': input.merchantTransactionId,
             'customer.merchantCustomerId': input.merchantCustomerId,
+            'cart.items[0].name': 'Pago único',
+            'cart.items[0].description': 'Pago único de servicio',
+            'cart.items[0].price': input.amount,
+            'cart.items[0].quantity': '1',
+            'shipping.street1': input.street1,
+            'shipping.country': input.country,
+            'billing.street1': input.street1,
+            'billing.country': input.country,
             'customParameters[SHOPPER_VAL_BASE0]': input.base0,
             'customParameters[SHOPPER_VAL_BASEIMP]': input.baseImp,
             'customParameters[SHOPPER_VAL_IVA]': input.iva,
@@ -98,12 +118,18 @@ let PaymentsService = class PaymentsService {
         if (input.oneClick)
             params['createRegistration'] = 'true';
         (_c = input === null || input === void 0 ? void 0 : input.registrations) === null || _c === void 0 ? void 0 : _c.forEach((id, i) => (params[`registrations[${i}].id`] = id));
+        console.log('📤 [createCheckout] Enviando al gateway:', JSON.stringify(params, null, 2));
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' } }));
+            console.log('✅ [createCheckout] Respuesta del gateway:', JSON.stringify(res.data, null, 2));
             return res.data;
         }
         catch (e) {
             const data = (_d = e === null || e === void 0 ? void 0 : e.response) === null || _d === void 0 ? void 0 : _d.data;
+            console.error('❌ [createCheckout] Error del gateway:', JSON.stringify({
+                status: (_e = e === null || e === void 0 ? void 0 : e.response) === null || _e === void 0 ? void 0 : _e.status,
+                data: data
+            }, null, 2));
             if (data)
                 throw new common_1.BadRequestException({ message: 'Gateway /v1/checkouts', gateway: data });
             throw new common_1.InternalServerErrorException('Checkout request failed (network/timeout)');
@@ -189,7 +215,7 @@ let PaymentsService = class PaymentsService {
         }
     }
     async getPaymentStatus(resourcePath, customerId) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e, _f;
         const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(this.entity())}`;
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.get(url, {
@@ -241,10 +267,18 @@ let PaymentsService = class PaymentsService {
                     }
                 }
             }
+            console.log('✅ [getPaymentStatus] Respuesta exitosa del gateway:', JSON.stringify(res.data, null, 2));
             return res.data;
         }
         catch (e) {
             const data = (_d = e === null || e === void 0 ? void 0 : e.response) === null || _d === void 0 ? void 0 : _d.data;
+            console.error('❌ [getPaymentStatus] Error del gateway:', JSON.stringify({
+                status: (_e = e === null || e === void 0 ? void 0 : e.response) === null || _e === void 0 ? void 0 : _e.status,
+                statusText: (_f = e === null || e === void 0 ? void 0 : e.response) === null || _f === void 0 ? void 0 : _f.statusText,
+                data: data,
+                resourcePath: resourcePath,
+                url: url
+            }, null, 2));
             if (data)
                 throw new common_1.BadRequestException({ message: 'Gateway status', gateway: data });
             throw new common_1.InternalServerErrorException('Status request failed (network/timeout)');
@@ -287,13 +321,23 @@ let PaymentsService = class PaymentsService {
         }
     }
     async waitForPaymentCompletion(resourcePath, maxAttempts = 10, delayMs = 2000) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e;
+        console.log(`🔁 [waitForPaymentCompletion] Iniciando polling para: ${resourcePath}`);
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
+                console.log(`⏳ [waitForPaymentCompletion] Intento ${attempt}/${maxAttempts}...`);
                 const paymentResult = await this.getPaymentStatus(resourcePath);
                 const resultCode = ((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code) || '';
+                console.log(`📊 [waitForPaymentCompletion] Código recibido: ${resultCode}, Descripción: ${(_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.description}`);
+                const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
+                const isSuccess = successCodes.includes(resultCode);
+                const rejectionCodes = resultCode.startsWith('100.') || resultCode.startsWith('800.') || resultCode.startsWith('900.');
+                if (isSuccess || rejectionCodes) {
+                    console.log(`✅ [waitForPaymentCompletion] Intento ${attempt}/${maxAttempts}] Pago completado con código: ${resultCode}`);
+                    return paymentResult;
+                }
                 if (resultCode.startsWith('200.') || resultCode.startsWith('000.200.')) {
-                    console.log(`[Intento ${attempt}/${maxAttempts}] Pago pendiente (${resultCode}), esperando...`);
+                    console.log(`⏸️  [Intento ${attempt}/${maxAttempts}] Pago pendiente (${resultCode}), esperando ${delayMs}ms...`);
                     if (attempt < maxAttempts) {
                         await new Promise(resolve => setTimeout(resolve, delayMs));
                         continue;
@@ -306,32 +350,48 @@ let PaymentsService = class PaymentsService {
                         });
                     }
                 }
-                console.log(`[Intento ${attempt}/${maxAttempts}] Pago completado con código: ${resultCode}`);
+                console.log(`⚠️ [waitForPaymentCompletion] Código no reconocido: ${resultCode}, retornando resultado`);
                 return paymentResult;
             }
             catch (error) {
+                console.error(`❌ [waitForPaymentCompletion] Error en intento ${attempt}:`, error);
                 if (attempt === maxAttempts) {
+                    console.error(`❌ [waitForPaymentCompletion] Máximo de intentos alcanzado, error final:`, error);
                     throw error;
                 }
-                const errorCode = ((_d = (_c = (_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.gateway) === null || _c === void 0 ? void 0 : _c.result) === null || _d === void 0 ? void 0 : _d.code) || '';
+                const errorCode = ((_e = (_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.gateway) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.code) || '';
+                console.log(`🔍 [waitForPaymentCompletion] Código de error: ${errorCode}`);
                 if (errorCode.startsWith('200.') || errorCode.startsWith('000.200.')) {
-                    console.log(`[Intento ${attempt}/${maxAttempts}] Error pendiente, reintentando...`);
+                    console.log(`⏸️  [Intento ${attempt}/${maxAttempts}] Error pendiente, reintentando en ${delayMs}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delayMs));
                     continue;
                 }
+                console.error(`❌ [waitForPaymentCompletion] Error no manejable, propagando...`);
                 throw error;
             }
         }
         throw new common_1.BadRequestException('No se pudo completar la verificación del pago');
     }
     async createSubscriptionCheckout(dto) {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         const planPrices = {
             [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: '77.00',
             [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: '19.99',
             [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: '1.00'
         };
+        const planNames = {
+            [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 'Plan Gimnasio Mensual',
+            [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 'Plan App Mensual',
+            [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 'Plan Prueba Mensual'
+        };
+        const planDescriptions = {
+            [create_subscription_dto_1.SubscriptionPlanDto.GYM_MONTHLY]: 'Suscripción mensual al gimnasio Animus Society',
+            [create_subscription_dto_1.SubscriptionPlanDto.APP_MONTHLY]: 'Suscripción mensual a la app Animus Society',
+            [create_subscription_dto_1.SubscriptionPlanDto.TEST_MONTHLY]: 'Suscripción de prueba mensual'
+        };
         const amount = planPrices[dto.planType];
+        const planName = planNames[dto.planType];
+        const planDescription = planDescriptions[dto.planType];
         if (!amount) {
             throw new common_1.BadRequestException('Plan de suscripción no válido');
         }
@@ -349,6 +409,14 @@ let PaymentsService = class PaymentsService {
                     givenName: dto.givenName,
                     middleName: dto.middleName,
                     surname: dto.surname,
+                    identificationDocType: dto.identificationDocType,
+                    identificationDocId: dto.identificationDocId,
+                    phone: dto.phone,
+                    street1: dto.street1,
+                    city: dto.city,
+                    state: dto.state,
+                    country: dto.country,
+                    postcode: dto.postcode,
                 }
             });
         }
@@ -362,8 +430,19 @@ let PaymentsService = class PaymentsService {
             'customer.surname': dto.surname,
             'customer.ip': dto.customerIp,
             'customer.email': dto.email,
+            'customer.identificationDocType': dto.identificationDocType,
+            'customer.identificationDocId': dto.identificationDocId,
+            'customer.phone': dto.phone,
             'merchantTransactionId': dto.merchantTransactionId,
             'customer.merchantCustomerId': dto.merchantCustomerId,
+            'cart.items[0].name': planName,
+            'cart.items[0].description': planDescription,
+            'cart.items[0].price': amount,
+            'cart.items[0].quantity': '1',
+            'shipping.street1': dto.street1,
+            'shipping.country': dto.country,
+            'billing.street1': dto.street1,
+            'billing.country': dto.country,
             'customParameters[SHOPPER_VAL_BASE0]': dto.base0,
             'customParameters[SHOPPER_VAL_BASEIMP]': dto.baseImp,
             'customParameters[SHOPPER_VAL_IVA]': dto.iva,
@@ -373,12 +452,15 @@ let PaymentsService = class PaymentsService {
             'customParameters[SHOPPER_PSERV]': '17913101',
             'customParameters[SHOPPER_VERSIONDF]': '2',
             'risk.parameters[USER_DATA2]': process.env.MERCHANT_NAME || 'TuComercio',
-            'recurringType': 'INITIAL'
+            'recurringType': 'INITIAL',
+            'createRegistration': 'true'
         };
         if (process.env.TEST_MODE)
             params['testMode'] = process.env.TEST_MODE;
+        console.log('[createSubscriptionCheckout] Enviando al gateway:', JSON.stringify(params, null, 2));
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.post('/v1/checkouts', qs.stringify(params), { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000 }));
+            console.log('✅ [createSubscriptionCheckout] Respuesta del gateway:', JSON.stringify(res.data, null, 2));
             try {
                 await this.prisma.payment.create({
                     data: {
@@ -424,11 +506,17 @@ let PaymentsService = class PaymentsService {
         }
         catch (e) {
             const data = (_g = e === null || e === void 0 ? void 0 : e.response) === null || _g === void 0 ? void 0 : _g.data;
+            console.error('❌ [createSubscriptionCheckout] Error:', JSON.stringify({
+                status: (_h = e === null || e === void 0 ? void 0 : e.response) === null || _h === void 0 ? void 0 : _h.status,
+                data: data,
+                code: e.code,
+                message: e.message
+            }, null, 2));
             if (data)
                 throw new common_1.BadRequestException({
                     message: 'Gateway /v1/checkouts subscription error',
                     gateway: data,
-                    status: (_h = e === null || e === void 0 ? void 0 : e.response) === null || _h === void 0 ? void 0 : _h.status
+                    status: (_j = e === null || e === void 0 ? void 0 : e.response) === null || _j === void 0 ? void 0 : _j.status
                 });
             if (e.code === 'ECONNABORTED' || e.message.includes('timeout')) {
                 throw new common_1.InternalServerErrorException({
@@ -445,12 +533,19 @@ let PaymentsService = class PaymentsService {
         }
     }
     async completeSubscriptionSetup(resourcePath, customerId, planType) {
-        var _a, _b, _c, _d, _e, _f;
-        console.log(`[completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+        console.log(`🔄 [completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
         const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000);
+        console.log(`📊 [completeSubscriptionSetup] Resultado del pago:`, JSON.stringify({
+            resultCode: (_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code,
+            resultDescription: (_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.description,
+            registrations: paymentResult.registrations,
+            registrationId: paymentResult.registrationId
+        }, null, 2));
         const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
-        const isSuccess = successCodes.includes((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code);
+        const isSuccess = successCodes.includes((_c = paymentResult.result) === null || _c === void 0 ? void 0 : _c.code);
         if (!isSuccess) {
+            console.error(`❌ [completeSubscriptionSetup] Pago no exitoso. Código: ${(_d = paymentResult.result) === null || _d === void 0 ? void 0 : _d.code}`);
             throw new common_1.BadRequestException({
                 message: 'Pago inicial no exitoso',
                 result: paymentResult.result
@@ -463,7 +558,7 @@ let PaymentsService = class PaymentsService {
         else if (paymentResult.registrationId) {
             tokenData = { id: paymentResult.registrationId };
         }
-        else if ((_b = paymentResult.card) === null || _b === void 0 ? void 0 : _b.registrationId) {
+        else if ((_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.registrationId) {
             tokenData = { id: paymentResult.card.registrationId };
         }
         else {
@@ -490,7 +585,7 @@ let PaymentsService = class PaymentsService {
                     resourcePath,
                     availableFields: Object.keys(paymentResult),
                     hasRegistrations: !!paymentResult.registrations,
-                    registrationsLength: ((_c = paymentResult.registrations) === null || _c === void 0 ? void 0 : _c.length) || 0
+                    registrationsLength: ((_f = paymentResult.registrations) === null || _f === void 0 ? void 0 : _f.length) || 0
                 }
             });
         }
@@ -524,9 +619,9 @@ let PaymentsService = class PaymentsService {
                 customerId: customerIdFromPayment,
                 token: tokenToSave,
                 brand: paymentResult.paymentBrand || 'UNKNOWN',
-                last4: ((_d = paymentResult.card) === null || _d === void 0 ? void 0 : _d.last4Digits) || '0000',
-                expiryMonth: parseInt(((_e = paymentResult.card) === null || _e === void 0 ? void 0 : _e.expiryMonth) || '12'),
-                expiryYear: parseInt(((_f = paymentResult.card) === null || _f === void 0 ? void 0 : _f.expiryYear) || '2030'),
+                last4: ((_g = paymentResult.card) === null || _g === void 0 ? void 0 : _g.last4Digits) || '0000',
+                expiryMonth: parseInt(((_h = paymentResult.card) === null || _h === void 0 ? void 0 : _h.expiryMonth) || '12'),
+                expiryYear: parseInt(((_j = paymentResult.card) === null || _j === void 0 ? void 0 : _j.expiryYear) || '2030'),
                 isActive: true
             }
         });
@@ -595,6 +690,18 @@ let PaymentsService = class PaymentsService {
         const baseImp = amount / (1 + taxRate);
         const iva = amount - baseImp;
         const merchantTransactionId = `SUB_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`.toUpperCase();
+        const planNames = {
+            'GYM_MONTHLY': 'Plan Gimnasio Mensual',
+            'APP_MONTHLY': 'Plan App Mensual',
+            'TEST_MONTHLY': 'Plan Prueba Mensual'
+        };
+        const planDescriptions = {
+            'GYM_MONTHLY': 'Suscripción mensual al gimnasio Animus Society',
+            'APP_MONTHLY': 'Suscripción mensual a la app Animus Society',
+            'TEST_MONTHLY': 'Suscripción de prueba mensual'
+        };
+        const planName = planNames[subscription.planType] || 'Plan Mensual';
+        const planDescription = planDescriptions[subscription.planType] || 'Suscripción mensual';
         const params = {
             entityId: this.entity(),
             amount: amount.toFixed(2),
@@ -604,6 +711,22 @@ let PaymentsService = class PaymentsService {
             'risk.parameters[USER_DATA1]': 'REPEATED',
             'risk.parameters[USER_DATA2]': process.env.MERCHANT_NAME || 'TuComercio',
             merchantTransactionId,
+            'customer.givenName': subscription.customer.givenName,
+            'customer.middleName': subscription.customer.middleName,
+            'customer.surname': subscription.customer.surname,
+            'customer.email': subscription.customer.email,
+            'customer.identificationDocType': subscription.customer.identificationDocType,
+            'customer.identificationDocId': subscription.customer.identificationDocId,
+            'customer.phone': subscription.customer.phone,
+            'customer.merchantCustomerId': subscription.customer.merchantCustomerId,
+            'cart.items[0].name': planName,
+            'cart.items[0].description': planDescription,
+            'cart.items[0].price': amount.toFixed(2),
+            'cart.items[0].quantity': '1',
+            'shipping.street1': subscription.customer.street1,
+            'shipping.country': subscription.customer.country,
+            'billing.street1': subscription.customer.street1,
+            'billing.country': subscription.customer.country,
             'customParameters[SHOPPER_MID]': process.env.MID || '',
             'customParameters[SHOPPER_TID]': process.env.TID || '',
             'customParameters[SHOPPER_ECI]': '0103910',

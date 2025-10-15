@@ -76,4 +76,45 @@ __decorate([
     (0, class_validator_1.Matches)(/^\d+(\.\d{1,2})?$/),
     __metadata("design:type", String)
 ], CreateSubscriptionDto.prototype, "iva", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'IDCARD', description: 'Tipo de documento: IDCARD, PASSPORT, etc.' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "identificationDocType", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '1234567890', description: 'Número de cédula/documento' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "identificationDocId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '+593987654321', description: 'Teléfono o celular del cliente' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "phone", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Av. Amazonas N123', description: 'Dirección/Calle' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "street1", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Quito', description: 'Ciudad' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "city", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Pichincha', description: 'Provincia/Estado' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "state", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'EC', description: 'Código de país (ISO)' }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(2, 2),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "country", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '170515', description: 'Código postal' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateSubscriptionDto.prototype, "postcode", void 0);
 //# sourceMappingURL=create-subscription.dto.js.map
