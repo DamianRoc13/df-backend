@@ -14,7 +14,8 @@ export class PaymentsService {
   ) {}
 
   private bearer() { return (process.env.OPPWA_BEARER || '').trim(); }
-  private entity() { return (process.env.OPPWA_ENTITY_ID || '').trim(); }
+  private entity() { return (process.env.OPPWA_ENTITY_ID || '').trim(); } // Para pagos únicos
+  private entityRecurring() { return (process.env.OPPWA_ENTITY_RECURRING_ID || process.env.OPPWA_ENTITY_ID || '').trim(); } // Para pagos recurrentes
   private oppUrl() { return (process.env.OPPWA_URL || '').trim(); }
 
   async createCheckout(input: any) {
@@ -224,8 +225,9 @@ export class PaymentsService {
     }
   }
 
-  async getPaymentStatus(resourcePath: string, customerId?: string) {
-    const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(this.entity())}`;
+  async getPaymentStatus(resourcePath: string, customerId?: string, useRecurringEntity: boolean = false) {
+    const entityId = useRecurringEntity ? this.entityRecurring() : this.entity();
+    const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(entityId)}`;
     try {
       const res = await firstValueFrom(this.http.get(url, {
         headers: { Authorization: `Bearer ${this.bearer()}` },
@@ -335,13 +337,14 @@ export class PaymentsService {
   private async waitForPaymentCompletion(
     resourcePath: string,
     maxAttempts: number = 10,
-    delayMs: number = 2000
+    delayMs: number = 2000,
+    useRecurringEntity: boolean = false
   ): Promise<any> {
     console.log(`🔁 [waitForPaymentCompletion] Iniciando polling para: ${resourcePath}`);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         console.log(`⏳ [waitForPaymentCompletion] Intento ${attempt}/${maxAttempts}...`);
-        const paymentResult = await this.getPaymentStatus(resourcePath);
+        const paymentResult = await this.getPaymentStatus(resourcePath, undefined, useRecurringEntity);
         const resultCode = paymentResult.result?.code || '';
         
         console.log(`📊 [waitForPaymentCompletion] Código recibido: ${resultCode}, Descripción: ${paymentResult.result?.description}`);
@@ -461,7 +464,7 @@ export class PaymentsService {
     }
 
     const params: Record<string, string> = {
-      entityId: this.entity(),
+      entityId: this.entityRecurring(), // Usar entity ID de recurrentes
       amount,
       currency: 'USD',
       paymentType: 'DB',
@@ -581,7 +584,7 @@ export class PaymentsService {
   async completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto) {
     // Esperar a que el pago se complete (con reintentos para manejar códigos 200.xxx)
     console.log(`🔄 [completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
-    const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000);
+    const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000, true); // true = usar entity recurring
     
     console.log(`📊 [completeSubscriptionSetup] Resultado del pago:`, JSON.stringify({
       resultCode: paymentResult.result?.code,
@@ -764,7 +767,7 @@ export class PaymentsService {
     const planDescription = planDescriptions[subscription.planType] || 'Suscripción mensual';
 
     const params: Record<string, string> = {
-      entityId: this.entity(),
+      entityId: this.entityRecurring(), // Usar entity ID de recurrentes
       amount: amount.toFixed(2),
       currency: 'USD',
       paymentType: 'DB',

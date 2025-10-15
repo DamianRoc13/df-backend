@@ -4,6 +4,7 @@ exports.default = () => ({
     oppwa: {
         url: process.env.OPPWA_URL,
         entityId: process.env.OPPWA_ENTITY_ID,
+        entityRecurringId: process.env.OPPWA_ENTITY_RECURRING_ID,
         bearer: process.env.OPPWA_BEARER,
         testMode: process.env.TEST_MODE,
     },

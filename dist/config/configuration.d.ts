@@ -2,6 +2,7 @@ declare const _default: () => {
     oppwa: {
         url: string;
         entityId: string;
+        entityRecurringId: string;
         bearer: string;
         testMode: string;
     };

@@ -24,6 +24,7 @@ let PaymentsService = class PaymentsService {
     }
     bearer() { return (process.env.OPPWA_BEARER || '').trim(); }
     entity() { return (process.env.OPPWA_ENTITY_ID || '').trim(); }
+    entityRecurring() { return (process.env.OPPWA_ENTITY_RECURRING_ID || process.env.OPPWA_ENTITY_ID || '').trim(); }
     oppUrl() { return (process.env.OPPWA_URL || '').trim(); }
     async createCheckout(input) {
         var _a, _b, _c, _d, _e;
@@ -214,9 +215,10 @@ let PaymentsService = class PaymentsService {
             throw e;
         }
     }
-    async getPaymentStatus(resourcePath, customerId) {
+    async getPaymentStatus(resourcePath, customerId, useRecurringEntity = false) {
         var _a, _b, _c, _d, _e, _f;
-        const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(this.entity())}`;
+        const entityId = useRecurringEntity ? this.entityRecurring() : this.entity();
+        const url = `${this.oppUrl()}${resourcePath}?entityId=${encodeURIComponent(entityId)}`;
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.get(url, {
                 headers: { Authorization: `Bearer ${this.bearer()}` },
@@ -320,13 +322,13 @@ let PaymentsService = class PaymentsService {
             return payment_status_enum_1.PaymentStatus.REJECTED;
         }
     }
-    async waitForPaymentCompletion(resourcePath, maxAttempts = 10, delayMs = 2000) {
+    async waitForPaymentCompletion(resourcePath, maxAttempts = 10, delayMs = 2000, useRecurringEntity = false) {
         var _a, _b, _c, _d, _e;
         console.log(`🔁 [waitForPaymentCompletion] Iniciando polling para: ${resourcePath}`);
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 console.log(`⏳ [waitForPaymentCompletion] Intento ${attempt}/${maxAttempts}...`);
-                const paymentResult = await this.getPaymentStatus(resourcePath);
+                const paymentResult = await this.getPaymentStatus(resourcePath, undefined, useRecurringEntity);
                 const resultCode = ((_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code) || '';
                 console.log(`📊 [waitForPaymentCompletion] Código recibido: ${resultCode}, Descripción: ${(_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.description}`);
                 const successCodes = ['000.000.000', '000.000.100', '000.100.110', '000.100.112'];
@@ -421,7 +423,7 @@ let PaymentsService = class PaymentsService {
             });
         }
         const params = {
-            entityId: this.entity(),
+            entityId: this.entityRecurring(),
             amount,
             currency: 'USD',
             paymentType: 'DB',
@@ -535,7 +537,7 @@ let PaymentsService = class PaymentsService {
     async completeSubscriptionSetup(resourcePath, customerId, planType) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         console.log(`🔄 [completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
-        const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000);
+        const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000, true);
         console.log(`📊 [completeSubscriptionSetup] Resultado del pago:`, JSON.stringify({
             resultCode: (_a = paymentResult.result) === null || _a === void 0 ? void 0 : _a.code,
             resultDescription: (_b = paymentResult.result) === null || _b === void 0 ? void 0 : _b.description,
@@ -703,7 +705,7 @@ let PaymentsService = class PaymentsService {
         const planName = planNames[subscription.planType] || 'Plan Mensual';
         const planDescription = planDescriptions[subscription.planType] || 'Suscripción mensual';
         const params = {
-            entityId: this.entity(),
+            entityId: this.entityRecurring(),
             amount: amount.toFixed(2),
             currency: 'USD',
             paymentType: 'DB',

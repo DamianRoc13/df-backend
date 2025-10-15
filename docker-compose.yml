@@ -28,6 +28,7 @@ services:
     environment:
       - OPPWA_URL=${OPPWA_URL}
       - OPPWA_ENTITY_ID=${OPPWA_ENTITY_ID}
+      - OPPWA_ENTITY_RECURRING_ID=${OPPWA_ENTITY_RECURRING_ID}
       - OPPWA_BEARER=${OPPWA_BEARER}
       - MID=${MID}
       - TID=${TID}

@@ -7,6 +7,7 @@ export declare class PaymentsService {
     constructor(http: HttpService, prisma: PrismaService);
     private bearer;
     private entity;
+    private entityRecurring;
     private oppUrl;
     createCheckout(input: any): Promise<any>;
     verifyRecurring(input: {
@@ -100,7 +101,7 @@ export declare class PaymentsService {
         paymentToken?: undefined;
     }>;
     private getPaymentStatusSafe;
-    getPaymentStatus(resourcePath: string, customerId?: string): Promise<any>;
+    getPaymentStatus(resourcePath: string, customerId?: string, useRecurringEntity?: boolean): Promise<any>;
     processPaymentCallback(resourcePath: string, data: any): Promise<any>;
     private determinePaymentStatus;
     private waitForPaymentCompletion;
