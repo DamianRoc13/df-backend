@@ -35,6 +35,7 @@ services:
       - MERCHANT_NAME=${MERCHANT_NAME}
       - PORT=${PORT:-3000}
       - DATABASE_URL=${DATABASE_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     depends_on:
