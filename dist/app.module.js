@@ -15,6 +15,7 @@ const axios_module_1 = require("./common/http/axios.module");
 const payments_module_1 = require("./payments/payments.module");
 const operations_module_1 = require("./operations/operations.module");
 const prisma_module_1 = require("./prisma/prisma.module");
+const history_payments_module_1 = require("./history-payments/history-payments.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -30,6 +31,7 @@ exports.AppModule = AppModule = __decorate([
             prisma_module_1.PrismaModule,
             payments_module_1.PaymentsModule,
             operations_module_1.OperationsModule,
+            history_payments_module_1.HistoryPaymentsModule,
         ],
     })
 ], AppModule);
