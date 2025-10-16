@@ -151,6 +151,11 @@ export class HistoryPaymentsService {
       );
     }
 
+    // Filtrar "nd" del middleName si es exactamente "nd"
+    const middleName = payment.customer.middleName.toLowerCase() === 'nd' 
+      ? '' 
+      : payment.customer.middleName;
+
     const detail: PaymentDetailDto = {
       id: payment.id,
       customer: {
@@ -158,7 +163,7 @@ export class HistoryPaymentsService {
         merchantCustomerId: payment.customer.merchantCustomerId,
         email: payment.customer.email,
         givenName: payment.customer.givenName,
-        middleName: payment.customer.middleName,
+        middleName: middleName,
         surname: payment.customer.surname,
         identificationDocType: payment.customer.identificationDocType,
         identificationDocId: payment.customer.identificationDocId,
