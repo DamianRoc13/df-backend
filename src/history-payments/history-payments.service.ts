@@ -101,17 +101,25 @@ export class HistoryPaymentsService {
     });
 
     // Mapear a DTO
-    const data: PaymentHistoryItemDto[] = payments.map((payment) => ({
-      id: payment.id,
-      customerName: `${payment.customer.givenName} ${payment.customer.middleName} ${payment.customer.surname}`.trim(),
-      customerIdentification: payment.customer.identificationDocId,
-      paymentType: payment.paymentType,
-      amount: Number(payment.amount),
-      currency: payment.currency,
-      status: payment.status,
-      createdAt: payment.createdAt,
-      merchantTransactionId: payment.merchantTransactionId,
-    }));
+    const data: PaymentHistoryItemDto[] = payments.map((payment) => {
+      // Construir nombre omitiendo "nd" si middleName es exactamente "nd"
+      const middleName = payment.customer.middleName.toLowerCase() === 'nd' 
+        ? '' 
+        : payment.customer.middleName;
+      const customerName = `${payment.customer.givenName} ${middleName} ${payment.customer.surname}`.trim().replace(/\s+/g, ' ');
+
+      return {
+        id: payment.id,
+        customerName,
+        customerIdentification: payment.customer.identificationDocId,
+        paymentType: payment.paymentType,
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        status: payment.status,
+        createdAt: payment.createdAt,
+        merchantTransactionId: payment.merchantTransactionId,
+      };
+    });
 
     const totalPages = Math.ceil(total / pageSize);
 
