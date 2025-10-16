@@ -26,11 +26,13 @@ export declare class PaymentsController {
         resultDescription: string;
         payment: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            merchantTransactionId: string;
             customerId: string;
             subscriptionId: string | null;
             tokenId: string | null;
             paymentType: import("@prisma/client").$Enums.PaymentType;
-            merchantTransactionId: string;
             amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             base0: import("@prisma/client/runtime/library").Decimal;
@@ -41,18 +43,16 @@ export declare class PaymentsController {
             resultDescription: string | null;
             resourcePath: string | null;
             status: import("@prisma/client").$Enums.PaymentStatus;
-            createdAt: Date;
-            updatedAt: Date;
         };
         subscription: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
             tokenId: string;
             amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             status: import("@prisma/client").$Enums.SubscriptionStatus;
-            createdAt: Date;
-            updatedAt: Date;
             planType: import("@prisma/client").$Enums.SubscriptionPlan;
             nextBillingDate: Date;
             lastBillingDate: Date | null;
@@ -61,9 +61,9 @@ export declare class PaymentsController {
         };
         paymentToken: {
             id: string;
-            customerId: string;
             createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             token: string;
             brand: string;
             last4: string;
@@ -106,8 +106,6 @@ export declare class PaymentsController {
         subscription: {
             customer: {
                 id: string;
-                createdAt: Date;
-                updatedAt: Date;
                 merchantCustomerId: string;
                 email: string;
                 givenName: string;
@@ -117,30 +115,22 @@ export declare class PaymentsController {
                 identificationDocId: string;
                 phone: string;
                 street1: string;
-                city: string | null;
-                state: string | null;
-                country: string | null;
-                postcode: string | null;
-            };
-            token: {
-                id: string;
-                customerId: string;
+                city: string;
+                state: string;
+                country: string;
+                postcode: string;
                 createdAt: Date;
                 updatedAt: Date;
-                token: string;
-                brand: string;
-                last4: string;
-                expiryMonth: number;
-                expiryYear: number;
-                isActive: boolean;
             };
             payments: {
                 id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                merchantTransactionId: string;
                 customerId: string;
                 subscriptionId: string | null;
                 tokenId: string | null;
                 paymentType: import("@prisma/client").$Enums.PaymentType;
-                merchantTransactionId: string;
                 amount: import("@prisma/client/runtime/library").Decimal;
                 currency: string;
                 base0: import("@prisma/client/runtime/library").Decimal;
@@ -151,18 +141,28 @@ export declare class PaymentsController {
                 resultDescription: string | null;
                 resourcePath: string | null;
                 status: import("@prisma/client").$Enums.PaymentStatus;
+            }[];
+            token: {
+                id: string;
                 createdAt: Date;
                 updatedAt: Date;
-            }[];
+                customerId: string;
+                token: string;
+                brand: string;
+                last4: string;
+                expiryMonth: number;
+                expiryYear: number;
+                isActive: boolean;
+            };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
             tokenId: string;
             amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             status: import("@prisma/client").$Enums.SubscriptionStatus;
-            createdAt: Date;
-            updatedAt: Date;
             planType: import("@prisma/client").$Enums.SubscriptionPlan;
             nextBillingDate: Date;
             lastBillingDate: Date | null;
@@ -171,9 +171,9 @@ export declare class PaymentsController {
         };
         paymentToken: {
             id: string;
-            customerId: string;
             createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             token: string;
             brand: string;
             last4: string;
@@ -188,8 +188,6 @@ export declare class PaymentsController {
         payment: {
             customer: {
                 id: string;
-                createdAt: Date;
-                updatedAt: Date;
                 merchantCustomerId: string;
                 email: string;
                 givenName: string;
@@ -199,20 +197,22 @@ export declare class PaymentsController {
                 identificationDocId: string;
                 phone: string;
                 street1: string;
-                city: string | null;
-                state: string | null;
-                country: string | null;
-                postcode: string | null;
+                city: string;
+                state: string;
+                country: string;
+                postcode: string;
+                createdAt: Date;
+                updatedAt: Date;
             };
             subscription: {
                 id: string;
+                createdAt: Date;
+                updatedAt: Date;
                 customerId: string;
                 tokenId: string;
                 amount: import("@prisma/client/runtime/library").Decimal;
                 currency: string;
                 status: import("@prisma/client").$Enums.SubscriptionStatus;
-                createdAt: Date;
-                updatedAt: Date;
                 planType: import("@prisma/client").$Enums.SubscriptionPlan;
                 nextBillingDate: Date;
                 lastBillingDate: Date | null;
@@ -221,9 +221,9 @@ export declare class PaymentsController {
             };
             token: {
                 id: string;
-                customerId: string;
                 createdAt: Date;
                 updatedAt: Date;
+                customerId: string;
                 token: string;
                 brand: string;
                 last4: string;
@@ -233,11 +233,13 @@ export declare class PaymentsController {
             };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            merchantTransactionId: string;
             customerId: string;
             subscriptionId: string | null;
             tokenId: string | null;
             paymentType: import("@prisma/client").$Enums.PaymentType;
-            merchantTransactionId: string;
             amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             base0: import("@prisma/client/runtime/library").Decimal;
@@ -248,8 +250,6 @@ export declare class PaymentsController {
             resultDescription: string | null;
             resourcePath: string | null;
             status: import("@prisma/client").$Enums.PaymentStatus;
-            createdAt: Date;
-            updatedAt: Date;
         };
         paymentResult: any;
         success: boolean;
@@ -257,8 +257,6 @@ export declare class PaymentsController {
     getDueSubscriptions(): Promise<({
         customer: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             merchantCustomerId: string;
             email: string;
             givenName: string;
@@ -268,16 +266,18 @@ export declare class PaymentsController {
             identificationDocId: string;
             phone: string;
             street1: string;
-            city: string | null;
-            state: string | null;
-            country: string | null;
-            postcode: string | null;
+            city: string;
+            state: string;
+            country: string;
+            postcode: string;
+            createdAt: Date;
+            updatedAt: Date;
         };
         token: {
             id: string;
-            customerId: string;
             createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             token: string;
             brand: string;
             last4: string;
@@ -287,13 +287,13 @@ export declare class PaymentsController {
         };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         tokenId: string;
         amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
-        createdAt: Date;
-        updatedAt: Date;
         planType: import("@prisma/client").$Enums.SubscriptionPlan;
         nextBillingDate: Date;
         lastBillingDate: Date | null;
@@ -302,13 +302,13 @@ export declare class PaymentsController {
     })[]>;
     pauseSubscription(subscriptionId: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         tokenId: string;
         amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
-        createdAt: Date;
-        updatedAt: Date;
         planType: import("@prisma/client").$Enums.SubscriptionPlan;
         nextBillingDate: Date;
         lastBillingDate: Date | null;
@@ -317,13 +317,13 @@ export declare class PaymentsController {
     }>;
     cancelSubscription(subscriptionId: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         tokenId: string;
         amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
-        createdAt: Date;
-        updatedAt: Date;
         planType: import("@prisma/client").$Enums.SubscriptionPlan;
         nextBillingDate: Date;
         lastBillingDate: Date | null;
@@ -332,13 +332,13 @@ export declare class PaymentsController {
     }>;
     resumeSubscription(subscriptionId: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         tokenId: string;
         amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
-        createdAt: Date;
-        updatedAt: Date;
         planType: import("@prisma/client").$Enums.SubscriptionPlan;
         nextBillingDate: Date;
         lastBillingDate: Date | null;
