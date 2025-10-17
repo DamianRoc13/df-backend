@@ -1,86 +1,61 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNumberString, IsOptional, IsString, Length, Matches, IsEnum } from 'class-validator';
+import { IsEmail, IsNumberString, IsOptional, IsString, Length, Matches, IsEnum, ValidateNested, IsNumber, IsUrl } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum SubscriptionPlanDto {
+  MONTHLY = 'MONTHLY',
+  YEARLY = 'YEARLY',
   GYM_MONTHLY = 'GYM_MONTHLY',
   APP_MONTHLY = 'APP_MONTHLY',
   TEST_MONTHLY = 'TEST_MONTHLY'
 }
 
-export class CreateSubscriptionDto {
-  // Información del cliente
+// Sub-DTO para información del cliente
+export class CustomerDto {
+  @ApiProperty({ example: 'USR123' }) 
+  @IsString() 
+  merchantCustomerId!: string;
+
   @ApiProperty({ example: 'juan.perez@email.com' }) 
   @IsEmail() 
   email!: string;
 
   @ApiProperty({ example: 'Juan' }) 
-  @Length(3,48) 
+  @IsString()
+  @Length(1, 48) 
   givenName!: string;
 
-  @ApiProperty({ example: 'Pablo' }) 
-  @Length(2,50) 
-  middleName!: string;
+  @ApiProperty({ example: 'Pablo', required: false }) 
+  @IsString()
+  @IsOptional()
+  middleName?: string;
 
   @ApiProperty({ example: 'Pérez' }) 
-  @Length(3,48) 
+  @IsString()
+  @Length(1, 48) 
   surname!: string;
 
-  @ApiProperty({ example: 'USR123' }) 
-  @Length(1,16) 
-  merchantCustomerId!: string;
-
-  // Plan de suscripción
-  @ApiProperty({ example: 'GYM_MONTHLY', enum: SubscriptionPlanDto }) 
-  @IsEnum(SubscriptionPlanDto) 
-  planType!: SubscriptionPlanDto;
-
-  // Datos del pago inicial
-  @ApiProperty({ example: 'ORD_01HXYZ...' }) 
-  @IsString() 
-  merchantTransactionId!: string;
-
-  // IP del cliente
-  @ApiProperty({ example: '181.39.XX.XX' }) 
-  @IsString() 
-  customerIp!: string;
-
-  // Impuestos (calculados en frontend)
-  @ApiProperty({ example: '0.00' }) 
-  @Matches(/^\d+(\.\d{1,2})?$/) 
-  base0!: string;
-
-  @ApiProperty({ example: '68.75' }) 
-  @Matches(/^\d+(\.\d{1,2})?$/) 
-  baseImp!: string;
-
-  @ApiProperty({ example: '8.25' }) 
-  @Matches(/^\d+(\.\d{1,2})?$/) 
-  iva!: string;
-
-  // Identificación (Fase 2 - Obligatorio DataFast)
-  @ApiProperty({ example: 'IDCARD', description: 'Tipo de documento: IDCARD, PASSPORT, etc.' }) 
+  @ApiProperty({ example: 'CC', description: 'Tipo de documento: CC, IDCARD, PASSPORT, etc.' }) 
   @IsString() 
   identificationDocType!: string;
 
-  @ApiProperty({ example: '1234567890', description: 'Número de cédula/documento' }) 
+  @ApiProperty({ example: '0106607534', description: 'Número de cédula/documento' }) 
   @IsString() 
   identificationDocId!: string;
 
-  // Teléfono (Fase 2 - Obligatorio DataFast)
-  @ApiProperty({ example: '+593987654321', description: 'Teléfono o celular del cliente' }) 
+  @ApiProperty({ example: '0987654321', description: 'Teléfono o celular del cliente' }) 
   @IsString() 
   phone!: string;
 
-  // Dirección (Fase 2 - Obligatorio DataFast)
-  @ApiProperty({ example: 'Av. Amazonas N123', description: 'Dirección/Calle' }) 
+  @ApiProperty({ example: 'Av. Principal 123', description: 'Dirección/Calle' }) 
   @IsString() 
   street1!: string;
 
-  @ApiProperty({ example: 'Quito', description: 'Ciudad' }) 
+  @ApiProperty({ example: 'Cuenca', description: 'Ciudad' }) 
   @IsString() 
   city!: string;
 
-  @ApiProperty({ example: 'Pichincha', description: 'Provincia/Estado' }) 
+  @ApiProperty({ example: 'Azuay', description: 'Provincia/Estado' }) 
   @IsString() 
   state!: string;
 
@@ -89,7 +64,56 @@ export class CreateSubscriptionDto {
   @Length(2, 2)
   country!: string;
 
-  @ApiProperty({ example: '170515', description: 'Código postal' }) 
+  @ApiProperty({ example: '010101', description: 'Código postal' }) 
   @IsString() 
   postcode!: string;
+}
+
+// Sub-DTO para información del pago
+export class PaymentDto {
+  @ApiProperty({ example: 'TXN_123456' }) 
+  @IsString() 
+  merchantTransactionId!: string;
+
+  @ApiProperty({ example: 'VISA' }) 
+  @IsString() 
+  paymentBrand!: string;
+
+  @ApiProperty({ example: 19.00 }) 
+  @IsNumber() 
+  amount!: number;
+
+  @ApiProperty({ example: 'USD' }) 
+  @IsString() 
+  currency!: string;
+
+  @ApiProperty({ example: 'MONTHLY', enum: SubscriptionPlanDto }) 
+  @IsEnum(SubscriptionPlanDto) 
+  planType!: SubscriptionPlanDto;
+
+  @ApiProperty({ example: 'INITIAL' }) 
+  @IsString() 
+  paymentType!: string;
+}
+
+// DTO principal que recibe la estructura del frontend
+export class CreateSubscriptionDto {
+  @ApiProperty({ type: CustomerDto })
+  @ValidateNested()
+  @Type(() => CustomerDto)
+  customer!: CustomerDto;
+
+  @ApiProperty({ type: PaymentDto })
+  @ValidateNested()
+  @Type(() => PaymentDto)
+  payment!: PaymentDto;
+
+  @ApiProperty({ example: 'https://pay.animussociety.com/payment-success' })
+  @IsUrl()
+  returnUrl!: string;
+
+  // Campo opcional que será inyectado por el controller
+  @IsOptional()
+  @IsString()
+  customerIp?: string;
 }

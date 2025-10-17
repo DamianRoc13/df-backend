@@ -3,11 +3,25 @@
 **Arquitectura:** vertical slices, modular monolith.  
 **Objetivo:** cumplir al 100% los requisitos de la guía (modo PRUEBAS) y dejar comentado qué cambia para PRODUCCIÓN.
 
+## 🔥 CORRECCIONES RECIENTES (17 Oct 2025)
+
+**Se han aplicado correcciones críticas para producción:**
+- ✅ **Checkout de suscripciones:** Error 500 corregido - DTO actualizado
+- ✅ **Historial de pagos:** Logs de debugging agregados
+- ✅ **Validaciones mejoradas:** Manejo robusto de errores
+
+📖 **Ver documentación completa:** [`README-DEPLOYMENT.md`](./README-DEPLOYMENT.md)  
+🧪 **Scripts de prueba:** `test-correcciones.sh` (Linux/Mac) o `test-correcciones.ps1` (Windows)
+
+---
+
 ## TL;DR
 - **Swagger:** http://localhost:3000/docs
 - **Endpoints clave**
   - `POST /api/payments/checkouts` → Método 1 (crea `checkoutId`)
+  - `POST /api/payments/subscriptions/checkout` → ✅ CORREGIDO - Checkout de suscripciones
   - `GET  /api/payments/status?resourcePath=...` → Método 2 (estado final JSON)
+  - `GET  /api/history-payments` → ✅ MEJORADO - Historial con logs
   - `GET  /api/payments/verify?paymentId=...|merchantTransactionId=...`
   - `POST /api/payments/void` (RF)
 - **ENV:** ver `.env.example` (usa `TEST_MODE=EXTERNAL` SOLO en pruebas; en prod se elimina)

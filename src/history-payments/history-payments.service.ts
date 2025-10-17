@@ -21,17 +21,31 @@ export class HistoryPaymentsService {
     paymentType?: PaymentType,
     search?: string,
   ): Promise<PaymentHistoryResponseDto> {
+    console.log('📥 [getPaymentHistory] Request:', {
+      page,
+      pageSize,
+      status,
+      paymentType,
+      search
+    });
+
     const skip = (page - 1) * pageSize;
+    console.log('🔢 [getPaymentHistory] Paginación:', {
+      skip,
+      take: pageSize
+    });
 
     // Construir filtros
     const where: any = {};
 
     if (status) {
       where.status = status;
+      console.log('🔍 [getPaymentHistory] Filtro por status:', status);
     }
 
     if (paymentType) {
       where.paymentType = paymentType;
+      console.log('🔍 [getPaymentHistory] Filtro por paymentType:', paymentType);
     }
 
     if (search) {
@@ -75,10 +89,12 @@ export class HistoryPaymentsService {
           },
         },
       ];
+      console.log('🔍 [getPaymentHistory] Filtro por búsqueda:', search);
     }
 
     // Obtener total de registros
     const total = await this.prisma.payment.count({ where });
+    console.log('📊 [getPaymentHistory] Total de registros en BD:', total);
 
     // Obtener pagos
     const payments = await this.prisma.payment.findMany({
@@ -99,6 +115,8 @@ export class HistoryPaymentsService {
         },
       },
     });
+
+    console.log('📦 [getPaymentHistory] Registros obtenidos:', payments.length);
 
     // Mapear a DTO
     const data: PaymentHistoryItemDto[] = payments.map((payment) => {
@@ -122,6 +140,14 @@ export class HistoryPaymentsService {
     });
 
     const totalPages = Math.ceil(total / pageSize);
+
+    console.log('📤 [getPaymentHistory] Response:', {
+      totalRecords: data.length,
+      page,
+      pageSize,
+      total,
+      totalPages
+    });
 
     return {
       data,
@@ -221,6 +247,8 @@ export class HistoryPaymentsService {
    * Obtener estadísticas del dashboard
    */
   async getPaymentStats() {
+    console.log('📊 [getPaymentStats] Calculando estadísticas...');
+
     const [
       totalRevenue,
       successfulPayments,
@@ -251,11 +279,15 @@ export class HistoryPaymentsService {
       }),
     ]);
 
-    return {
+    const stats = {
       totalRevenue: Number(totalRevenue._sum.amount || 0),
       successfulPayments,
       pendingPayments,
       failedPayments,
     };
+
+    console.log('📤 [getPaymentStats] Estadísticas:', stats);
+
+    return stats;
   }
 }

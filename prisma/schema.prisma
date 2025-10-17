@@ -121,10 +121,14 @@ model Payment {
 
 // Enums
 // Tipos de planes de suscripción
+// MONTHLY: Plan mensual genérico (precio variable)
+// YEARLY: Plan anual genérico (precio variable)
 // GYM_MONTHLY: $77/mes
 // APP_MONTHLY: $19.99/mes
 // TEST_MONTHLY: $1/mes (pruebas)
 enum SubscriptionPlan {
+  MONTHLY
+  YEARLY
   GYM_MONTHLY
   APP_MONTHLY
   TEST_MONTHLY

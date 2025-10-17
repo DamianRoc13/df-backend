@@ -6,7 +6,7 @@ import { AxiosModule } from './common/http/axios.module';
 import { PaymentsModule } from './payments/payments.module';
 import { OperationsModule } from './operations/operations.module';
 import { PrismaModule } from './prisma/prisma.module';
-// import { HistoryPaymentsModule } from './history-payments/history-payments.module';
+import { HistoryPaymentsModule } from './history-payments/history-payments.module';
 
 @Module({
   imports: [
@@ -19,7 +19,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     PaymentsModule,
     OperationsModule,
-    // HistoryPaymentsModule,
+    HistoryPaymentsModule,
   ],
 })
 export class AppModule {}

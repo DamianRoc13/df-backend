@@ -408,168 +408,265 @@ export class PaymentsService {
   }
 
   async createSubscriptionCheckout(dto: CreateSubscriptionDto) {
-    const planPrices = {
-      [SubscriptionPlanDto.GYM_MONTHLY]: '77.00',
-      [SubscriptionPlanDto.APP_MONTHLY]: '19.99',
-      [SubscriptionPlanDto.TEST_MONTHLY]: '1.00'
-    };
-    const planNames = {
-      [SubscriptionPlanDto.GYM_MONTHLY]: 'Plan Gimnasio Mensual',
-      [SubscriptionPlanDto.APP_MONTHLY]: 'Plan App Mensual',
-      [SubscriptionPlanDto.TEST_MONTHLY]: 'Plan Prueba Mensual'
-    };
-    const planDescriptions = {
-      [SubscriptionPlanDto.GYM_MONTHLY]: 'Suscripción mensual al gimnasio Animus Society',
-      [SubscriptionPlanDto.APP_MONTHLY]: 'Suscripción mensual a la app Animus Society',
-      [SubscriptionPlanDto.TEST_MONTHLY]: 'Suscripción de prueba mensual'
-    };
-    
-    const amount = planPrices[dto.planType];
-    const planName = planNames[dto.planType];
-    const planDescription = planDescriptions[dto.planType];
-    
-    if (!amount) {
-      throw new BadRequestException('Plan de suscripción no válido');
+    console.log('📥 [createSubscriptionCheckout] Request recibido:', JSON.stringify({
+      customer: dto.customer,
+      payment: dto.payment,
+      returnUrl: dto.returnUrl,
+      customerIp: dto.customerIp
+    }, null, 2));
+
+    // Validar datos de entrada
+    if (!dto.customer) {
+      throw new BadRequestException('Datos del cliente son requeridos');
+    }
+    if (!dto.payment) {
+      throw new BadRequestException('Datos del pago son requeridos');
+    }
+    if (!dto.customer.email || !dto.customer.identificationDocId) {
+      throw new BadRequestException('Email e identificación del cliente son obligatorios');
+    }
+    if (!dto.payment.amount || dto.payment.amount <= 0) {
+      throw new BadRequestException('Monto de pago inválido');
+    }
+    if (!dto.payment.planType || !['MONTHLY', 'YEARLY', 'GYM_MONTHLY', 'APP_MONTHLY', 'TEST_MONTHLY'].includes(dto.payment.planType)) {
+      throw new BadRequestException('Tipo de plan inválido');
     }
 
+    // Mapeo de planes a precios
+    const planPrices: Record<string, string> = {
+      'MONTHLY': dto.payment.amount.toFixed(2), // Usar el monto enviado
+      'YEARLY': dto.payment.amount.toFixed(2),  // Usar el monto enviado
+      'GYM_MONTHLY': '77.00',
+      'APP_MONTHLY': '19.99',
+      'TEST_MONTHLY': '1.00'
+    };
+
+    const planNames: Record<string, string> = {
+      'MONTHLY': 'Plan Mensual',
+      'YEARLY': 'Plan Anual',
+      'GYM_MONTHLY': 'Plan Gimnasio Mensual',
+      'APP_MONTHLY': 'Plan App Mensual',
+      'TEST_MONTHLY': 'Plan Prueba Mensual'
+    };
+
+    const planDescriptions: Record<string, string> = {
+      'MONTHLY': 'Suscripción mensual Animus Society',
+      'YEARLY': 'Suscripción anual Animus Society',
+      'GYM_MONTHLY': 'Suscripción mensual al gimnasio Animus Society',
+      'APP_MONTHLY': 'Suscripción mensual a la app Animus Society',
+      'TEST_MONTHLY': 'Suscripción de prueba mensual'
+    };
+    
+    const amount = planPrices[dto.payment.planType] || dto.payment.amount.toFixed(2);
+    const planName = planNames[dto.payment.planType] || 'Plan de Suscripción';
+    const planDescription = planDescriptions[dto.payment.planType] || 'Suscripción a Animus Society';
+
+    // Calcular impuestos (IVA 15% para Ecuador)
+    const amountFloat = parseFloat(amount);
+    const baseImp = amountFloat / 1.15; // Base imponible
+    const iva = amountFloat - baseImp;   // IVA 15%
+    const base0 = 0;                     // Base 0%
+
+    console.log('💰 [createSubscriptionCheckout] Cálculo de impuestos:', {
+      amount: amountFloat,
+      baseImp: baseImp.toFixed(2),
+      iva: iva.toFixed(2),
+      base0: base0.toFixed(2)
+    });
+
+    // Crear o actualizar cliente
     let customer = await this.prisma.customer.findUnique({
-      where: { email: dto.email }
+      where: { email: dto.customer.email }
     });
 
     if (!customer) {
+      console.log('👤 [createSubscriptionCheckout] Creando nuevo cliente...');
       customer = await this.prisma.customer.create({
         data: {
-          merchantCustomerId: dto.merchantCustomerId,
-          email: dto.email,
-          givenName: dto.givenName,
-          middleName: dto.middleName,
-          surname: dto.surname,
-          identificationDocType: dto.identificationDocType,
-          identificationDocId: dto.identificationDocId,
-          phone: dto.phone,
-          street1: dto.street1,
-          city: dto.city,
-          state: dto.state,
-          country: dto.country,
-          postcode: dto.postcode,
+          merchantCustomerId: dto.customer.merchantCustomerId || `CUST_${Date.now()}`,
+          email: dto.customer.email,
+          givenName: dto.customer.givenName,
+          middleName: dto.customer.middleName || 'nd',
+          surname: dto.customer.surname,
+          identificationDocType: dto.customer.identificationDocType,
+          identificationDocId: dto.customer.identificationDocId,
+          phone: dto.customer.phone,
+          street1: dto.customer.street1,
+          city: dto.customer.city,
+          state: dto.customer.state,
+          country: dto.customer.country,
+          postcode: dto.customer.postcode,
         }
       });
+      console.log('✅ [createSubscriptionCheckout] Cliente creado:', customer.id);
+    } else {
+      console.log('✅ [createSubscriptionCheckout] Cliente existente:', customer.id);
     }
 
+    // Preparar parámetros para el gateway
     const params: Record<string, string> = {
       entityId: this.entityRecurring(), // Usar entity ID de recurrentes
       amount,
-      currency: 'USD',
+      currency: dto.payment.currency || 'USD',
       paymentType: 'DB',
-      'customer.givenName': dto.givenName,
-      'customer.middleName': dto.middleName,
-      'customer.surname': dto.surname,
-      'customer.ip': dto.customerIp,
-      'customer.email': dto.email,
-      'customer.identificationDocType': dto.identificationDocType,
-      'customer.identificationDocId': dto.identificationDocId,
-      'customer.phone': dto.phone,
-      'merchantTransactionId': dto.merchantTransactionId,
-      'customer.merchantCustomerId': dto.merchantCustomerId,
+      'customer.givenName': dto.customer.givenName,
+      'customer.middleName': dto.customer.middleName || 'nd',
+      'customer.surname': dto.customer.surname,
+      'customer.ip': dto.customerIp || '0.0.0.0',
+      'customer.email': dto.customer.email,
+      'customer.identificationDocType': dto.customer.identificationDocType,
+      'customer.identificationDocId': dto.customer.identificationDocId,
+      'customer.phone': dto.customer.phone,
+      'merchantTransactionId': dto.payment.merchantTransactionId,
+      'customer.merchantCustomerId': dto.customer.merchantCustomerId || customer.merchantCustomerId,
       // Información del carrito (obligatorio DataFast)
       'cart.items[0].name': planName,
       'cart.items[0].description': planDescription,
       'cart.items[0].price': amount,
       'cart.items[0].quantity': '1',
-      'shipping.street1': dto.street1,
-      'shipping.country': dto.country,
-      'billing.street1': dto.street1,
-      'billing.country': dto.country,
-      'customParameters[SHOPPER_VAL_BASE0]': dto.base0,
-      'customParameters[SHOPPER_VAL_BASEIMP]': dto.baseImp,
-      'customParameters[SHOPPER_VAL_IVA]': dto.iva,
+      // Dirección de envío (obligatorio DataFast)
+      'shipping.street1': dto.customer.street1,
+      'shipping.city': dto.customer.city,
+      'shipping.state': dto.customer.state,
+      'shipping.country': dto.customer.country,
+      'shipping.postcode': dto.customer.postcode,
+      // Dirección de facturación (obligatorio DataFast)
+      'billing.street1': dto.customer.street1,
+      'billing.city': dto.customer.city,
+      'billing.state': dto.customer.state,
+      'billing.country': dto.customer.country,
+      'billing.postcode': dto.customer.postcode,
+      // Parámetros personalizados de impuestos
+      'customParameters[SHOPPER_VAL_BASE0]': base0.toFixed(2),
+      'customParameters[SHOPPER_VAL_BASEIMP]': baseImp.toFixed(2),
+      'customParameters[SHOPPER_VAL_IVA]': iva.toFixed(2),
       'customParameters[SHOPPER_MID]': process.env.MID || '',
       'customParameters[SHOPPER_TID]': process.env.TID || '',
       'customParameters[SHOPPER_ECI]': '0103910',
       'customParameters[SHOPPER_PSERV]': '17913101',
       'customParameters[SHOPPER_VERSIONDF]': '2',
-      'risk.parameters[USER_DATA2]': process.env.MERCHANT_NAME || 'TuComercio',
+      'risk.parameters[USER_DATA2]': process.env.MERCHANT_NAME || 'AnimusSociety',
+      // Parámetros para pagos recurrentes
       'recurringType': 'INITIAL',
       'createRegistration': 'true'
     };
-    if (process.env.TEST_MODE) params['testMode'] = process.env.TEST_MODE;
 
-    console.log('[createSubscriptionCheckout] Enviando al gateway:', JSON.stringify(params, null, 2));
+    if (process.env.TEST_MODE) {
+      params['testMode'] = process.env.TEST_MODE;
+    }
+
+    console.log('📤 [createSubscriptionCheckout] Enviando al gateway:', JSON.stringify(params, null, 2));
 
     try {
+      // Llamar a la API del gateway
       const res = await firstValueFrom(this.http.post(
         '/v1/checkouts',
         qs.stringify(params),
-        { headers: { Authorization: `Bearer ${this.bearer()}`, 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000 }
+        { 
+          headers: { 
+            Authorization: `Bearer ${this.bearer()}`, 
+            'Content-Type': 'application/x-www-form-urlencoded' 
+          }, 
+          timeout: 30000 
+        }
       ));
 
       console.log('✅ [createSubscriptionCheckout] Respuesta del gateway:', JSON.stringify(res.data, null, 2));
 
+      // Guardar registro del pago en la base de datos
       try {
-        await this.prisma.payment.create({
+        const paymentRecord = await this.prisma.payment.create({
           data: {
             customerId: customer.id,
             paymentType: 'INITIAL',
-            merchantTransactionId: dto.merchantTransactionId,
+            merchantTransactionId: dto.payment.merchantTransactionId,
             amount: parseFloat(amount),
-            currency: 'USD',
-            base0: parseFloat(dto.base0),
-            baseImp: parseFloat(dto.baseImp),
-            iva: parseFloat(dto.iva),
+            currency: dto.payment.currency || 'USD',
+            base0: base0,
+            baseImp: baseImp,
+            iva: iva,
             gatewayResponse: res.data,
             resultCode: res.data.result?.code || 'PENDING',
-            resultDescription: res.data.result?.description,
-            resourcePath: res.data.resourcePath,
+            resultDescription: res.data.result?.description || 'Checkout creado',
+            resourcePath: res.data.id || '',
             status: 'PENDING'
           }
         });
+        console.log('✅ [createSubscriptionCheckout] Pago guardado en BD:', paymentRecord.id);
       } catch (dbError: any) {
+        console.error('⚠️ [createSubscriptionCheckout] Error al guardar en BD:', dbError);
+        // Si ya existe, actualizar
         if (dbError.code === 'P2002' && dbError.meta?.target?.includes('merchantTransactionId')) {
           await this.prisma.payment.update({
-            where: { merchantTransactionId: dto.merchantTransactionId },
+            where: { merchantTransactionId: dto.payment.merchantTransactionId },
             data: {
               gatewayResponse: res.data,
               resultCode: res.data.result?.code || 'PENDING',
-              resultDescription: res.data.result?.description,
-              resourcePath: res.data.resourcePath,
+              resultDescription: res.data.result?.description || 'Checkout actualizado',
+              resourcePath: res.data.id || '',
               status: 'PENDING',
               updatedAt: new Date()
             }
           });
+          console.log('✅ [createSubscriptionCheckout] Pago actualizado en BD');
         } else {
           throw dbError;
         }
       }
 
+      // Retornar respuesta con información adicional
       return {
-        ...res.data,
+        checkoutId: res.data.id,
+        paymentId: dto.payment.merchantTransactionId,
+        status: 'PENDING',
+        redirectUrl: res.data.redirectUrl || `${this.oppUrl()}/v1/paymentWidgets.js?checkoutId=${res.data.id}`,
+        message: 'Checkout creado exitosamente',
         customerId: customer.id,
-        planType: dto.planType
+        planType: dto.payment.planType,
+        ...res.data
       };
     } catch (e: any) {
       const data = e?.response?.data;
-      console.error('❌ [createSubscriptionCheckout] Error:', JSON.stringify({
+      console.error('❌ [createSubscriptionCheckout] Error completo:', JSON.stringify({
         status: e?.response?.status,
+        statusText: e?.response?.statusText,
         data: data,
         code: e.code,
-        message: e.message
+        message: e.message,
+        stack: e.stack
       }, null, 2));
-      if (data) throw new BadRequestException({
-        message: 'Gateway /v1/checkouts subscription error',
-        gateway: data,
-        status: e?.response?.status
-      });
+
+      // Manejo específico de errores
+      if (data) {
+        throw new BadRequestException({
+          message: 'Error al crear checkout en el gateway de pagos',
+          gateway: data,
+          status: e?.response?.status,
+          details: 'Verifica que todos los parámetros sean correctos'
+        });
+      }
+      
       if (e.code === 'ECONNABORTED' || e.message.includes('timeout')) {
         throw new InternalServerErrorException({
-          message: 'Subscription checkout timeout - gateway not responding',
-          error: e.message,
+          message: 'Timeout al conectar con el gateway de pagos',
+          error: 'El gateway no respondió a tiempo. Por favor intenta nuevamente.',
           code: e.code
         });
       }
+
+      if (e.code === 'ECONNREFUSED') {
+        throw new InternalServerErrorException({
+          message: 'No se pudo conectar con el gateway de pagos',
+          error: 'El servicio de pagos no está disponible. Verifica la configuración.',
+          code: e.code
+        });
+      }
+
       throw new InternalServerErrorException({
-        message: 'Subscription checkout failed',
+        message: 'Error inesperado al crear el checkout de suscripción',
         error: e.message,
-        code: e.code
+        code: e.code,
+        details: 'Por favor contacta al soporte técnico'
       });
     }
   }
@@ -679,20 +776,29 @@ export class PaymentsService {
     });
 
     const nextBillingDate = new Date();
-    nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+    if (planType === 'YEARLY') {
+      nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
+    } else {
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+    }
 
-    const planPrices = {
-      [SubscriptionPlanDto.GYM_MONTHLY]: 77.00,
-      [SubscriptionPlanDto.APP_MONTHLY]: 19.99,
-      [SubscriptionPlanDto.TEST_MONTHLY]: 1.00
+    const planPrices: Record<string, number> = {
+      'MONTHLY': parseFloat(payment.amount.toString()),
+      'YEARLY': parseFloat(payment.amount.toString()),
+      'GYM_MONTHLY': 77.00,
+      'APP_MONTHLY': 19.99,
+      'TEST_MONTHLY': 1.00
     };
+
+    // Convertir SubscriptionPlanDto a string para Prisma
+    const planTypeValue = planType as string;
 
     const subscription = await this.prisma.subscription.create({
       data: {
         customerId: customerIdFromPayment,
         tokenId: paymentToken.id,
-        planType,
-        amount: planPrices[planType],
+        planType: planTypeValue as any,
+        amount: planPrices[planType] || parseFloat(payment.amount.toString()),
         nextBillingDate,
         lastBillingDate: new Date(),
         status: 'ACTIVE'
