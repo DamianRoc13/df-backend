@@ -19,10 +19,6 @@ export class PaymentsService {
   private oppUrl() { return (process.env.OPPWA_URL || '').trim(); }
 
   async createCheckout(input: any) {
-    if (process.env.TEST_MODE && parseFloat(input.amount) > 50) {
-      throw new BadRequestException('En pruebas, amount debe ser ≤ 50.00');
-    }
-
     let customer = await this.prisma.customer.findFirst({
       where: {
         OR: [
@@ -434,9 +430,6 @@ export class PaymentsService {
     
     if (!amount) {
       throw new BadRequestException('Plan de suscripción no válido');
-    }
-    if (process.env.TEST_MODE && parseFloat(amount) > 50) {
-      throw new BadRequestException('En pruebas, amount debe ser ≤ 50.00');
     }
 
     let customer = await this.prisma.customer.findUnique({
