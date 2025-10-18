@@ -559,51 +559,44 @@ export class PaymentsService {
 
       console.log('✅ [createSubscriptionCheckout] Respuesta del gateway:', JSON.stringify(res.data, null, 2));
 
-      // Guardar registro del pago en la base de datos
-      try {
-        const paymentRecord = await this.prisma.payment.create({
-          data: {
-            customerId: customer.id,
-            paymentType: 'INITIAL',
-            merchantTransactionId: dto.merchantTransactionId,
-            amount: parseFloat(amount),
-            currency: dto.currency || 'USD',
-            base0: base0,
-            baseImp: baseImp,
-            iva: iva,
-            gatewayResponse: res.data,
-            resultCode: res.data.result?.code || 'PENDING',
-            resultDescription: res.data.result?.description || 'Checkout creado',
-            resourcePath: res.data.id || '',
-            status: 'PENDING'
-          }
-        });
-        console.log('✅ [createSubscriptionCheckout] Pago guardado en BD:', paymentRecord.id);
-      } catch (dbError: any) {
-        console.error('⚠️ [createSubscriptionCheckout] Error al guardar en BD:', dbError);
-        // Si ya existe, actualizar
-        if (dbError.code === 'P2002' && dbError.meta?.target?.includes('merchantTransactionId')) {
-          await this.prisma.payment.update({
-            where: { merchantTransactionId: dto.merchantTransactionId },
-            data: {
-              gatewayResponse: res.data,
-              resultCode: res.data.result?.code || 'PENDING',
-              resultDescription: res.data.result?.description || 'Checkout actualizado',
-              resourcePath: res.data.id || '',
-              status: 'PENDING',
-              updatedAt: new Date()
-            }
-          });
-          console.log('✅ [createSubscriptionCheckout] Pago actualizado en BD');
-        } else {
-          throw dbError;
-        }
+      // Verificar si ya existe un pago con este merchantTransactionId
+      const existingPayment = await this.prisma.payment.findUnique({
+        where: { merchantTransactionId: dto.merchantTransactionId }
+      });
+
+      let finalMerchantTransactionId = dto.merchantTransactionId;
+      
+      if (existingPayment) {
+        // Si ya existe, generar un nuevo ID único agregando timestamp
+        finalMerchantTransactionId = `${dto.merchantTransactionId}_${Date.now()}`;
+        console.log(`⚠️ [createSubscriptionCheckout] merchantTransactionId ya existe, generando nuevo ID: ${finalMerchantTransactionId}`);
       }
 
-      // Retornar respuesta con información adicional
+      // Guardar registro del pago en la base de datos con el ID único
+      const paymentRecord = await this.prisma.payment.create({
+        data: {
+          customerId: customer.id,
+          paymentType: 'INITIAL',
+          merchantTransactionId: finalMerchantTransactionId,
+          amount: parseFloat(amount),
+          currency: dto.currency || 'USD',
+          base0: base0,
+          baseImp: baseImp,
+          iva: iva,
+          gatewayResponse: res.data,
+          resultCode: res.data.result?.code || 'PENDING',
+          resultDescription: res.data.result?.description || 'Checkout creado',
+          resourcePath: res.data.id || '',
+          status: 'PENDING'
+        }
+      });
+      console.log('✅ [createSubscriptionCheckout] Pago guardado en BD:', paymentRecord.id);
+
+      // Retornar respuesta con información adicional (usar el ID final, no el original)
       return {
         checkoutId: res.data.id,
-        paymentId: dto.merchantTransactionId,
+        paymentId: finalMerchantTransactionId,
+        originalPaymentId: dto.merchantTransactionId, // Mantener referencia al ID original
         status: 'PENDING',
         redirectUrl: res.data.redirectUrl || `${this.oppUrl()}/v1/paymentWidgets.js?checkoutId=${res.data.id}`,
         message: 'Checkout creado exitosamente',

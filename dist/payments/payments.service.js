@@ -371,7 +371,7 @@ let PaymentsService = class PaymentsService {
         throw new common_1.BadRequestException('No se pudo completar la verificación del pago');
     }
     async createSubscriptionCheckout(dto) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f;
         console.log('📥 [createSubscriptionCheckout] Request recibido:', JSON.stringify(dto, null, 2));
         if (!dto.email || !dto.identificationDocId) {
             throw new common_1.BadRequestException('Email e identificación del cliente son obligatorios');
@@ -493,49 +493,36 @@ let PaymentsService = class PaymentsService {
                 timeout: 30000
             }));
             console.log('✅ [createSubscriptionCheckout] Respuesta del gateway:', JSON.stringify(res.data, null, 2));
-            try {
-                const paymentRecord = await this.prisma.payment.create({
-                    data: {
-                        customerId: customer.id,
-                        paymentType: 'INITIAL',
-                        merchantTransactionId: dto.merchantTransactionId,
-                        amount: parseFloat(amount),
-                        currency: dto.currency || 'USD',
-                        base0: base0,
-                        baseImp: baseImp,
-                        iva: iva,
-                        gatewayResponse: res.data,
-                        resultCode: ((_a = res.data.result) === null || _a === void 0 ? void 0 : _a.code) || 'PENDING',
-                        resultDescription: ((_b = res.data.result) === null || _b === void 0 ? void 0 : _b.description) || 'Checkout creado',
-                        resourcePath: res.data.id || '',
-                        status: 'PENDING'
-                    }
-                });
-                console.log('✅ [createSubscriptionCheckout] Pago guardado en BD:', paymentRecord.id);
+            const existingPayment = await this.prisma.payment.findUnique({
+                where: { merchantTransactionId: dto.merchantTransactionId }
+            });
+            let finalMerchantTransactionId = dto.merchantTransactionId;
+            if (existingPayment) {
+                finalMerchantTransactionId = `${dto.merchantTransactionId}_${Date.now()}`;
+                console.log(`⚠️ [createSubscriptionCheckout] merchantTransactionId ya existe, generando nuevo ID: ${finalMerchantTransactionId}`);
             }
-            catch (dbError) {
-                console.error('⚠️ [createSubscriptionCheckout] Error al guardar en BD:', dbError);
-                if (dbError.code === 'P2002' && ((_d = (_c = dbError.meta) === null || _c === void 0 ? void 0 : _c.target) === null || _d === void 0 ? void 0 : _d.includes('merchantTransactionId'))) {
-                    await this.prisma.payment.update({
-                        where: { merchantTransactionId: dto.merchantTransactionId },
-                        data: {
-                            gatewayResponse: res.data,
-                            resultCode: ((_e = res.data.result) === null || _e === void 0 ? void 0 : _e.code) || 'PENDING',
-                            resultDescription: ((_f = res.data.result) === null || _f === void 0 ? void 0 : _f.description) || 'Checkout actualizado',
-                            resourcePath: res.data.id || '',
-                            status: 'PENDING',
-                            updatedAt: new Date()
-                        }
-                    });
-                    console.log('✅ [createSubscriptionCheckout] Pago actualizado en BD');
+            const paymentRecord = await this.prisma.payment.create({
+                data: {
+                    customerId: customer.id,
+                    paymentType: 'INITIAL',
+                    merchantTransactionId: finalMerchantTransactionId,
+                    amount: parseFloat(amount),
+                    currency: dto.currency || 'USD',
+                    base0: base0,
+                    baseImp: baseImp,
+                    iva: iva,
+                    gatewayResponse: res.data,
+                    resultCode: ((_a = res.data.result) === null || _a === void 0 ? void 0 : _a.code) || 'PENDING',
+                    resultDescription: ((_b = res.data.result) === null || _b === void 0 ? void 0 : _b.description) || 'Checkout creado',
+                    resourcePath: res.data.id || '',
+                    status: 'PENDING'
                 }
-                else {
-                    throw dbError;
-                }
-            }
+            });
+            console.log('✅ [createSubscriptionCheckout] Pago guardado en BD:', paymentRecord.id);
             return {
                 checkoutId: res.data.id,
-                paymentId: dto.merchantTransactionId,
+                paymentId: finalMerchantTransactionId,
+                originalPaymentId: dto.merchantTransactionId,
                 status: 'PENDING',
                 redirectUrl: res.data.redirectUrl || `${this.oppUrl()}/v1/paymentWidgets.js?checkoutId=${res.data.id}`,
                 message: 'Checkout creado exitosamente',
@@ -545,10 +532,10 @@ let PaymentsService = class PaymentsService {
             };
         }
         catch (e) {
-            const data = (_g = e === null || e === void 0 ? void 0 : e.response) === null || _g === void 0 ? void 0 : _g.data;
+            const data = (_c = e === null || e === void 0 ? void 0 : e.response) === null || _c === void 0 ? void 0 : _c.data;
             console.error('❌ [createSubscriptionCheckout] Error completo:', JSON.stringify({
-                status: (_h = e === null || e === void 0 ? void 0 : e.response) === null || _h === void 0 ? void 0 : _h.status,
-                statusText: (_j = e === null || e === void 0 ? void 0 : e.response) === null || _j === void 0 ? void 0 : _j.statusText,
+                status: (_d = e === null || e === void 0 ? void 0 : e.response) === null || _d === void 0 ? void 0 : _d.status,
+                statusText: (_e = e === null || e === void 0 ? void 0 : e.response) === null || _e === void 0 ? void 0 : _e.statusText,
                 data: data,
                 code: e.code,
                 message: e.message,
@@ -558,7 +545,7 @@ let PaymentsService = class PaymentsService {
                 throw new common_1.BadRequestException({
                     message: 'Error al crear checkout en el gateway de pagos',
                     gateway: data,
-                    status: (_k = e === null || e === void 0 ? void 0 : e.response) === null || _k === void 0 ? void 0 : _k.status,
+                    status: (_f = e === null || e === void 0 ? void 0 : e.response) === null || _f === void 0 ? void 0 : _f.status,
                     details: 'Verifica que todos los parámetros sean correctos'
                 });
             }
