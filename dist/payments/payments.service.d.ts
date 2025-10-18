@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSubscriptionDto, SubscriptionPlanDto } from './dto/create-subscription.dto';
+import { CreateSubscriptionDto, SubscriptionPlanType } from './dto/create-subscription.dto';
 export declare class PaymentsService {
     private http;
     private prisma;
@@ -29,17 +29,17 @@ export declare class PaymentsService {
         resultCode: string;
         resultDescription: string;
         payment: {
+            amount: import("@prisma/client/runtime/library").Decimal;
+            base0: import("@prisma/client/runtime/library").Decimal;
+            baseImp: import("@prisma/client/runtime/library").Decimal;
+            iva: import("@prisma/client/runtime/library").Decimal;
+            paymentType: import("@prisma/client").$Enums.PaymentType;
             id: string;
             customerId: string;
             subscriptionId: string | null;
             tokenId: string | null;
-            paymentType: import("@prisma/client").$Enums.PaymentType;
             merchantTransactionId: string;
-            amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
-            base0: import("@prisma/client/runtime/library").Decimal;
-            baseImp: import("@prisma/client/runtime/library").Decimal;
-            iva: import("@prisma/client/runtime/library").Decimal;
             gatewayResponse: import("@prisma/client/runtime/library").JsonValue;
             resultCode: string;
             resultDescription: string | null;
@@ -49,10 +49,10 @@ export declare class PaymentsService {
             updatedAt: Date;
         };
         subscription: {
+            amount: import("@prisma/client/runtime/library").Decimal;
             id: string;
             customerId: string;
             tokenId: string;
-            amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             status: import("@prisma/client").$Enums.SubscriptionStatus;
             createdAt: Date;
@@ -106,7 +106,7 @@ export declare class PaymentsService {
     private determinePaymentStatus;
     private waitForPaymentCompletion;
     createSubscriptionCheckout(dto: CreateSubscriptionDto): Promise<any>;
-    completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto): Promise<{
+    completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanType): Promise<{
         subscription: {
             customer: {
                 id: string;
@@ -121,10 +121,10 @@ export declare class PaymentsService {
                 identificationDocId: string;
                 phone: string;
                 street1: string;
-                city: string;
-                state: string;
-                country: string;
-                postcode: string;
+                city: string | null;
+                state: string | null;
+                country: string | null;
+                postcode: string | null;
             };
             token: {
                 id: string;
@@ -139,17 +139,17 @@ export declare class PaymentsService {
                 isActive: boolean;
             };
             payments: {
+                amount: import("@prisma/client/runtime/library").Decimal;
+                base0: import("@prisma/client/runtime/library").Decimal;
+                baseImp: import("@prisma/client/runtime/library").Decimal;
+                iva: import("@prisma/client/runtime/library").Decimal;
+                paymentType: import("@prisma/client").$Enums.PaymentType;
                 id: string;
                 customerId: string;
                 subscriptionId: string | null;
                 tokenId: string | null;
-                paymentType: import("@prisma/client").$Enums.PaymentType;
                 merchantTransactionId: string;
-                amount: import("@prisma/client/runtime/library").Decimal;
                 currency: string;
-                base0: import("@prisma/client/runtime/library").Decimal;
-                baseImp: import("@prisma/client/runtime/library").Decimal;
-                iva: import("@prisma/client/runtime/library").Decimal;
                 gatewayResponse: import("@prisma/client/runtime/library").JsonValue;
                 resultCode: string;
                 resultDescription: string | null;
@@ -159,10 +159,10 @@ export declare class PaymentsService {
                 updatedAt: Date;
             }[];
         } & {
+            amount: import("@prisma/client/runtime/library").Decimal;
             id: string;
             customerId: string;
             tokenId: string;
-            amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
             status: import("@prisma/client").$Enums.SubscriptionStatus;
             createdAt: Date;
@@ -203,16 +203,16 @@ export declare class PaymentsService {
                 identificationDocId: string;
                 phone: string;
                 street1: string;
-                city: string;
-                state: string;
-                country: string;
-                postcode: string;
+                city: string | null;
+                state: string | null;
+                country: string | null;
+                postcode: string | null;
             };
             subscription: {
+                amount: import("@prisma/client/runtime/library").Decimal;
                 id: string;
                 customerId: string;
                 tokenId: string;
-                amount: import("@prisma/client/runtime/library").Decimal;
                 currency: string;
                 status: import("@prisma/client").$Enums.SubscriptionStatus;
                 createdAt: Date;
@@ -236,17 +236,17 @@ export declare class PaymentsService {
                 isActive: boolean;
             };
         } & {
+            amount: import("@prisma/client/runtime/library").Decimal;
+            base0: import("@prisma/client/runtime/library").Decimal;
+            baseImp: import("@prisma/client/runtime/library").Decimal;
+            iva: import("@prisma/client/runtime/library").Decimal;
+            paymentType: import("@prisma/client").$Enums.PaymentType;
             id: string;
             customerId: string;
             subscriptionId: string | null;
             tokenId: string | null;
-            paymentType: import("@prisma/client").$Enums.PaymentType;
             merchantTransactionId: string;
-            amount: import("@prisma/client/runtime/library").Decimal;
             currency: string;
-            base0: import("@prisma/client/runtime/library").Decimal;
-            baseImp: import("@prisma/client/runtime/library").Decimal;
-            iva: import("@prisma/client/runtime/library").Decimal;
             gatewayResponse: import("@prisma/client/runtime/library").JsonValue;
             resultCode: string;
             resultDescription: string | null;
@@ -272,10 +272,10 @@ export declare class PaymentsService {
             identificationDocId: string;
             phone: string;
             street1: string;
-            city: string;
-            state: string;
-            country: string;
-            postcode: string;
+            city: string | null;
+            state: string | null;
+            country: string | null;
+            postcode: string | null;
         };
         token: {
             id: string;
@@ -290,10 +290,10 @@ export declare class PaymentsService {
             isActive: boolean;
         };
     } & {
+        amount: import("@prisma/client/runtime/library").Decimal;
         id: string;
         customerId: string;
         tokenId: string;
-        amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
         createdAt: Date;
@@ -305,10 +305,10 @@ export declare class PaymentsService {
         maxRetries: number;
     })[]>;
     pauseSubscription(subscriptionId: string): Promise<{
+        amount: import("@prisma/client/runtime/library").Decimal;
         id: string;
         customerId: string;
         tokenId: string;
-        amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
         createdAt: Date;
@@ -320,10 +320,10 @@ export declare class PaymentsService {
         maxRetries: number;
     }>;
     cancelSubscription(subscriptionId: string): Promise<{
+        amount: import("@prisma/client/runtime/library").Decimal;
         id: string;
         customerId: string;
         tokenId: string;
-        amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
         createdAt: Date;
@@ -335,10 +335,10 @@ export declare class PaymentsService {
         maxRetries: number;
     }>;
     resumeSubscription(subscriptionId: string): Promise<{
+        amount: import("@prisma/client/runtime/library").Decimal;
         id: string;
         customerId: string;
         tokenId: string;
-        amount: import("@prisma/client/runtime/library").Decimal;
         currency: string;
         status: import("@prisma/client").$Enums.SubscriptionStatus;
         createdAt: Date;

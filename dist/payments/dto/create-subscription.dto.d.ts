@@ -1,16 +1,16 @@
-export declare enum SubscriptionPlanDto {
-    MONTHLY = "MONTHLY",
-    YEARLY = "YEARLY",
+export declare enum SubscriptionPlanType {
     GYM_MONTHLY = "GYM_MONTHLY",
     APP_MONTHLY = "APP_MONTHLY",
     TEST_MONTHLY = "TEST_MONTHLY"
 }
-export declare class CustomerDto {
-    merchantCustomerId: string;
-    email: string;
+export declare class CreateSubscriptionDto {
+    merchantTransactionId: string;
+    planType: SubscriptionPlanType;
     givenName: string;
     middleName?: string;
     surname: string;
+    email: string;
+    merchantCustomerId: string;
     identificationDocType: string;
     identificationDocId: string;
     phone: string;
@@ -19,18 +19,10 @@ export declare class CustomerDto {
     state: string;
     country: string;
     postcode: string;
-}
-export declare class PaymentDto {
-    merchantTransactionId: string;
-    paymentBrand: string;
-    amount: number;
-    currency: string;
-    planType: SubscriptionPlanDto;
-    paymentType: string;
-}
-export declare class CreateSubscriptionDto {
-    customer: CustomerDto;
-    payment: PaymentDto;
+    base0: string;
+    baseImp: string;
+    iva: string;
+    currency?: string;
     returnUrl: string;
     customerIp?: string;
 }

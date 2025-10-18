@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, InternalServerErrorException, NotFound
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSubscriptionDto, SubscriptionPlanDto } from './dto/create-subscription.dto';
+import { CreateSubscriptionDto, SubscriptionPlanType } from './dto/create-subscription.dto';
 import { PaymentStatus } from './types/payment-status.enum';
 import * as qs from 'qs';
 
@@ -408,67 +408,53 @@ export class PaymentsService {
   }
 
   async createSubscriptionCheckout(dto: CreateSubscriptionDto) {
-    console.log('📥 [createSubscriptionCheckout] Request recibido:', JSON.stringify({
-      customer: dto.customer,
-      payment: dto.payment,
-      returnUrl: dto.returnUrl,
-      customerIp: dto.customerIp
-    }, null, 2));
+    console.log('📥 [createSubscriptionCheckout] Request recibido:', JSON.stringify(dto, null, 2));
 
-    // Validar datos de entrada
-    if (!dto.customer) {
-      throw new BadRequestException('Datos del cliente son requeridos');
-    }
-    if (!dto.payment) {
-      throw new BadRequestException('Datos del pago son requeridos');
-    }
-    if (!dto.customer.email || !dto.customer.identificationDocId) {
+    // Validar datos de entrada (estructura plana)
+    if (!dto.email || !dto.identificationDocId) {
       throw new BadRequestException('Email e identificación del cliente son obligatorios');
     }
-    if (!dto.payment.amount || dto.payment.amount <= 0) {
-      throw new BadRequestException('Monto de pago inválido');
-    }
-    if (!dto.payment.planType || !['MONTHLY', 'YEARLY', 'GYM_MONTHLY', 'APP_MONTHLY', 'TEST_MONTHLY'].includes(dto.payment.planType)) {
+    if (!dto.planType || !['GYM_MONTHLY', 'APP_MONTHLY', 'TEST_MONTHLY'].includes(dto.planType)) {
       throw new BadRequestException('Tipo de plan inválido');
+    }
+    if (!dto.givenName || !dto.surname) {
+      throw new BadRequestException('Nombre y apellido son obligatorios');
     }
 
     // Mapeo de planes a precios
     const planPrices: Record<string, string> = {
-      'MONTHLY': dto.payment.amount.toFixed(2), // Usar el monto enviado
-      'YEARLY': dto.payment.amount.toFixed(2),  // Usar el monto enviado
       'GYM_MONTHLY': '77.00',
       'APP_MONTHLY': '19.99',
       'TEST_MONTHLY': '1.00'
     };
 
     const planNames: Record<string, string> = {
-      'MONTHLY': 'Plan Mensual',
-      'YEARLY': 'Plan Anual',
       'GYM_MONTHLY': 'Plan Gimnasio Mensual',
       'APP_MONTHLY': 'Plan App Mensual',
       'TEST_MONTHLY': 'Plan Prueba Mensual'
     };
 
     const planDescriptions: Record<string, string> = {
-      'MONTHLY': 'Suscripción mensual Animus Society',
-      'YEARLY': 'Suscripción anual Animus Society',
       'GYM_MONTHLY': 'Suscripción mensual al gimnasio Animus Society',
       'APP_MONTHLY': 'Suscripción mensual a la app Animus Society',
       'TEST_MONTHLY': 'Suscripción de prueba mensual'
     };
     
-    const amount = planPrices[dto.payment.planType] || dto.payment.amount.toFixed(2);
-    const planName = planNames[dto.payment.planType] || 'Plan de Suscripción';
-    const planDescription = planDescriptions[dto.payment.planType] || 'Suscripción a Animus Society';
+    const amount = planPrices[dto.planType];
+    const planName = planNames[dto.planType];
+    const planDescription = planDescriptions[dto.planType];
+    
+    if (!amount) {
+      throw new BadRequestException('Plan de suscripción no válido');
+    }
 
-    // Calcular impuestos (IVA 15% para Ecuador)
-    const amountFloat = parseFloat(amount);
-    const baseImp = amountFloat / 1.15; // Base imponible
-    const iva = amountFloat - baseImp;   // IVA 15%
-    const base0 = 0;                     // Base 0%
+    // Calcular impuestos desde los valores enviados
+    const base0 = parseFloat(dto.base0);
+    const baseImp = parseFloat(dto.baseImp);
+    const iva = parseFloat(dto.iva);
 
-    console.log('💰 [createSubscriptionCheckout] Cálculo de impuestos:', {
-      amount: amountFloat,
+    console.log('💰 [createSubscriptionCheckout] Impuestos recibidos:', {
+      amount,
       baseImp: baseImp.toFixed(2),
       iva: iva.toFixed(2),
       base0: base0.toFixed(2)
@@ -476,26 +462,26 @@ export class PaymentsService {
 
     // Crear o actualizar cliente
     let customer = await this.prisma.customer.findUnique({
-      where: { email: dto.customer.email }
+      where: { email: dto.email }
     });
 
     if (!customer) {
       console.log('👤 [createSubscriptionCheckout] Creando nuevo cliente...');
       customer = await this.prisma.customer.create({
         data: {
-          merchantCustomerId: dto.customer.merchantCustomerId || `CUST_${Date.now()}`,
-          email: dto.customer.email,
-          givenName: dto.customer.givenName,
-          middleName: dto.customer.middleName || 'nd',
-          surname: dto.customer.surname,
-          identificationDocType: dto.customer.identificationDocType,
-          identificationDocId: dto.customer.identificationDocId,
-          phone: dto.customer.phone,
-          street1: dto.customer.street1,
-          city: dto.customer.city,
-          state: dto.customer.state,
-          country: dto.customer.country,
-          postcode: dto.customer.postcode,
+          merchantCustomerId: dto.merchantCustomerId || `CUST_${Date.now()}`,
+          email: dto.email,
+          givenName: dto.givenName,
+          middleName: dto.middleName || 'nd',
+          surname: dto.surname,
+          identificationDocType: dto.identificationDocType,
+          identificationDocId: dto.identificationDocId,
+          phone: dto.phone,
+          street1: dto.street1,
+          city: dto.city,
+          state: dto.state,
+          country: dto.country,
+          postcode: dto.postcode,
         }
       });
       console.log('✅ [createSubscriptionCheckout] Cliente creado:', customer.id);
@@ -507,35 +493,35 @@ export class PaymentsService {
     const params: Record<string, string> = {
       entityId: this.entityRecurring(), // Usar entity ID de recurrentes
       amount,
-      currency: dto.payment.currency || 'USD',
+      currency: dto.currency || 'USD',
       paymentType: 'DB',
-      'customer.givenName': dto.customer.givenName,
-      'customer.middleName': dto.customer.middleName || 'nd',
-      'customer.surname': dto.customer.surname,
+      'customer.givenName': dto.givenName,
+      'customer.middleName': dto.middleName || 'nd',
+      'customer.surname': dto.surname,
       'customer.ip': dto.customerIp || '0.0.0.0',
-      'customer.email': dto.customer.email,
-      'customer.identificationDocType': dto.customer.identificationDocType,
-      'customer.identificationDocId': dto.customer.identificationDocId,
-      'customer.phone': dto.customer.phone,
-      'merchantTransactionId': dto.payment.merchantTransactionId,
-      'customer.merchantCustomerId': dto.customer.merchantCustomerId || customer.merchantCustomerId,
+      'customer.email': dto.email,
+      'customer.identificationDocType': dto.identificationDocType,
+      'customer.identificationDocId': dto.identificationDocId,
+      'customer.phone': dto.phone,
+      'merchantTransactionId': dto.merchantTransactionId,
+      'customer.merchantCustomerId': dto.merchantCustomerId || customer.merchantCustomerId,
       // Información del carrito (obligatorio DataFast)
       'cart.items[0].name': planName,
       'cart.items[0].description': planDescription,
       'cart.items[0].price': amount,
       'cart.items[0].quantity': '1',
       // Dirección de envío (obligatorio DataFast)
-      'shipping.street1': dto.customer.street1,
-      'shipping.city': dto.customer.city,
-      'shipping.state': dto.customer.state,
-      'shipping.country': dto.customer.country,
-      'shipping.postcode': dto.customer.postcode,
+      'shipping.street1': dto.street1,
+      'shipping.city': dto.city,
+      'shipping.state': dto.state,
+      'shipping.country': dto.country,
+      'shipping.postcode': dto.postcode,
       // Dirección de facturación (obligatorio DataFast)
-      'billing.street1': dto.customer.street1,
-      'billing.city': dto.customer.city,
-      'billing.state': dto.customer.state,
-      'billing.country': dto.customer.country,
-      'billing.postcode': dto.customer.postcode,
+      'billing.street1': dto.street1,
+      'billing.city': dto.city,
+      'billing.state': dto.state,
+      'billing.country': dto.country,
+      'billing.postcode': dto.postcode,
       // Parámetros personalizados de impuestos
       'customParameters[SHOPPER_VAL_BASE0]': base0.toFixed(2),
       'customParameters[SHOPPER_VAL_BASEIMP]': baseImp.toFixed(2),
@@ -579,9 +565,9 @@ export class PaymentsService {
           data: {
             customerId: customer.id,
             paymentType: 'INITIAL',
-            merchantTransactionId: dto.payment.merchantTransactionId,
+            merchantTransactionId: dto.merchantTransactionId,
             amount: parseFloat(amount),
-            currency: dto.payment.currency || 'USD',
+            currency: dto.currency || 'USD',
             base0: base0,
             baseImp: baseImp,
             iva: iva,
@@ -598,7 +584,7 @@ export class PaymentsService {
         // Si ya existe, actualizar
         if (dbError.code === 'P2002' && dbError.meta?.target?.includes('merchantTransactionId')) {
           await this.prisma.payment.update({
-            where: { merchantTransactionId: dto.payment.merchantTransactionId },
+            where: { merchantTransactionId: dto.merchantTransactionId },
             data: {
               gatewayResponse: res.data,
               resultCode: res.data.result?.code || 'PENDING',
@@ -617,12 +603,12 @@ export class PaymentsService {
       // Retornar respuesta con información adicional
       return {
         checkoutId: res.data.id,
-        paymentId: dto.payment.merchantTransactionId,
+        paymentId: dto.merchantTransactionId,
         status: 'PENDING',
         redirectUrl: res.data.redirectUrl || `${this.oppUrl()}/v1/paymentWidgets.js?checkoutId=${res.data.id}`,
         message: 'Checkout creado exitosamente',
         customerId: customer.id,
-        planType: dto.payment.planType,
+        planType: dto.planType,
         ...res.data
       };
     } catch (e: any) {
@@ -671,7 +657,7 @@ export class PaymentsService {
     }
   }
 
-  async completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanDto) {
+  async completeSubscriptionSetup(resourcePath: string, customerId: string, planType: SubscriptionPlanType) {
     // Esperar a que el pago se complete (con reintentos para manejar códigos 200.xxx)
     console.log(`🔄 [completeSubscriptionSetup] Iniciando verificación del pago para resourcePath: ${resourcePath}`);
     const paymentResult = await this.waitForPaymentCompletion(resourcePath, 10, 2000, true); // true = usar entity recurring
@@ -776,21 +762,16 @@ export class PaymentsService {
     });
 
     const nextBillingDate = new Date();
-    if (planType === 'YEARLY') {
-      nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
-    } else {
-      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-    }
+    // Todos los planes actuales son mensuales (GYM_MONTHLY, APP_MONTHLY, TEST_MONTHLY)
+    nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
 
     const planPrices: Record<string, number> = {
-      'MONTHLY': parseFloat(payment.amount.toString()),
-      'YEARLY': parseFloat(payment.amount.toString()),
       'GYM_MONTHLY': 77.00,
       'APP_MONTHLY': 19.99,
       'TEST_MONTHLY': 1.00
     };
 
-    // Convertir SubscriptionPlanDto a string para Prisma
+    // Convertir SubscriptionPlanType a string para Prisma
     const planTypeValue = planType as string;
 
     const subscription = await this.prisma.subscription.create({
