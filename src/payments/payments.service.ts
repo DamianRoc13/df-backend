@@ -227,6 +227,7 @@ export class PaymentsService {
     try {
       const res = await firstValueFrom(this.http.get(url, {
         headers: { Authorization: `Bearer ${this.bearer()}` },
+        timeout: 25000, // Timeout de 25 segundos para evitar 502
       }));
       const paymentData = res.data;
 

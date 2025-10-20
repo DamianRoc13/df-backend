@@ -218,6 +218,7 @@ let PaymentsService = class PaymentsService {
         try {
             const res = await (0, rxjs_1.firstValueFrom)(this.http.get(url, {
                 headers: { Authorization: `Bearer ${this.bearer()}` },
+                timeout: 25000,
             }));
             const paymentData = res.data;
             if (paymentData === null || paymentData === void 0 ? void 0 : paymentData.merchantTransactionId) {

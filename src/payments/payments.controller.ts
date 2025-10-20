@@ -156,8 +156,12 @@ export class PaymentsController {
     @Query('customerId') customerId?: string,
     @Query('planType') planType?: string
   ) {
+    const startTime = Date.now();
+    console.log(`[json-response] GET request recibido - type: ${type}, resourcePath: ${resourcePath}`);
+    
     try {
       let paymentData: any;
+      
       if (type === 'subscription' && customerId && planType) {
         console.log(`[json-response] Procesando suscripción - resourcePath: ${resourcePath}`);
         
@@ -177,7 +181,16 @@ export class PaymentsController {
         };
       } else {
         console.log(`[json-response] Procesando pago único - resourcePath: ${resourcePath}`);
-        paymentData = await this.svc.getPaymentStatus(resourcePath, customerId);
+        
+        // Para pagos únicos, usar timeout más corto
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout al obtener estado del pago')), 20000)
+        );
+        
+        paymentData = await Promise.race([
+          this.svc.getPaymentStatus(resourcePath, customerId),
+          timeoutPromise
+        ]);
       }
 
       const safe = JSON.parse(
@@ -187,26 +200,45 @@ export class PaymentsController {
         })
       );
 
+      const duration = Date.now() - startTime;
+      console.log(`[json-response] Éxito en ${duration}ms - redirigiendo a payment-success`);
+
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
       const encodedData = encodeURIComponent(JSON.stringify(safe));
       const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
+      
       response.redirect(302, redirectUrl);
     } catch (error) {
-      console.error('[json-response] Error:', error);
+      const duration = Date.now() - startTime;
+      console.error(`[json-response] Error después de ${duration}ms:`, error);
+      
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+      
+      // Si es timeout o error de red, crear datos con estado PENDING
+      const isTimeout = (error as any)?.message?.includes('Timeout') || 
+                       (error as any)?.code === 'ECONNABORTED' ||
+                       (error as any)?.message?.includes('timeout');
+      
       const err = {
         error: true,
         success: false,
-        message: (error as any)?.message || 'json-response error',
+        status: isTimeout ? 'PENDING' : 'ERROR',
+        message: (error as any)?.message || 'Error al procesar el pago',
         details: { 
           name: (error as any)?.name, 
           status: (error as any)?.status,
           code: (error as any)?.code,
-          attempts: (error as any)?.attempts
+          isTimeout,
+          duration,
+          // Incluir resourcePath para que el frontend pueda intentar verificar después
+          resourcePath: resourcePath,
+          checkoutId: checkoutId
         }
       };
+      
       const encodedData = encodeURIComponent(JSON.stringify(err));
       const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
+      
       response.redirect(302, redirectUrl);
     }
   }

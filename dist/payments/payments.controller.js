@@ -114,6 +114,9 @@ let PaymentsController = class PaymentsController {
         }
     }
     async jsonResponse(response, type, checkoutId, resourcePath, customerId, planType) {
+        var _a, _b;
+        const startTime = Date.now();
+        console.log(`[json-response] GET request recibido - type: ${type}, resourcePath: ${resourcePath}`);
         try {
             let paymentData;
             if (type === 'subscription' && customerId && planType) {
@@ -130,30 +133,44 @@ let PaymentsController = class PaymentsController {
             }
             else {
                 console.log(`[json-response] Procesando pago único - resourcePath: ${resourcePath}`);
-                paymentData = await this.svc.getPaymentStatus(resourcePath, customerId);
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout al obtener estado del pago')), 20000));
+                paymentData = await Promise.race([
+                    this.svc.getPaymentStatus(resourcePath, customerId),
+                    timeoutPromise
+                ]);
             }
             const safe = JSON.parse(JSON.stringify(paymentData, (key, value) => {
                 if (key === 'subscription' || key === 'payments')
                     return undefined;
                 return value;
             }));
+            const duration = Date.now() - startTime;
+            console.log(`[json-response] Éxito en ${duration}ms - redirigiendo a payment-success`);
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
             const encodedData = encodeURIComponent(JSON.stringify(safe));
             const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
             response.redirect(302, redirectUrl);
         }
         catch (error) {
-            console.error('[json-response] Error:', error);
+            const duration = Date.now() - startTime;
+            console.error(`[json-response] Error después de ${duration}ms:`, error);
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+            const isTimeout = ((_a = error === null || error === void 0 ? void 0 : error.message) === null || _a === void 0 ? void 0 : _a.includes('Timeout')) ||
+                (error === null || error === void 0 ? void 0 : error.code) === 'ECONNABORTED' ||
+                ((_b = error === null || error === void 0 ? void 0 : error.message) === null || _b === void 0 ? void 0 : _b.includes('timeout'));
             const err = {
                 error: true,
                 success: false,
-                message: (error === null || error === void 0 ? void 0 : error.message) || 'json-response error',
+                status: isTimeout ? 'PENDING' : 'ERROR',
+                message: (error === null || error === void 0 ? void 0 : error.message) || 'Error al procesar el pago',
                 details: {
                     name: error === null || error === void 0 ? void 0 : error.name,
                     status: error === null || error === void 0 ? void 0 : error.status,
                     code: error === null || error === void 0 ? void 0 : error.code,
-                    attempts: error === null || error === void 0 ? void 0 : error.attempts
+                    isTimeout,
+                    duration,
+                    resourcePath: resourcePath,
+                    checkoutId: checkoutId
                 }
             };
             const encodedData = encodeURIComponent(JSON.stringify(err));
