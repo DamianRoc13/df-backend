@@ -147,8 +147,8 @@ export class PaymentsController {
   }
 
   @Get('json-response')
-  @ApiOperation({ summary: 'Endpoint que devuelve JSON puro de la respuesta del pago' })
-  async jsonResponse(
+  @ApiOperation({ summary: 'Endpoint GET que procesa pago y redirige a /payment-processing' })
+  async jsonResponseGet(
     @Res({ passthrough: false }) response: Response,
     @Query('type') type: string,
     @Query('id') checkoutId: string,
@@ -157,89 +157,90 @@ export class PaymentsController {
     @Query('planType') planType?: string
   ) {
     const startTime = Date.now();
-    console.log(`[json-response] GET request recibido - type: ${type}, resourcePath: ${resourcePath}`);
+    console.log(`[json-response GET] Request recibido - type: ${type}, resourcePath: ${resourcePath}`);
     
-    try {
-      let paymentData: any;
-      
-      if (type === 'subscription' && customerId && planType) {
-        console.log(`[json-response] Procesando suscripción - resourcePath: ${resourcePath}`);
+    // ✅ PROCESO EN SEGUNDO PLANO - No bloqueamos la redirección
+    const processPaymentInBackground = async () => {
+      try {
+        let paymentData: any;
         
-        // Este método ahora incluye polling para esperar el estado final
-        const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType as any);
-        
-        // Usar el paymentResult que ya obtuvimos en completeSubscriptionSetup
-        // Crear objeto limpio sin referencia circular
-        paymentData = {
-          ...result.paymentResult,
-          subscriptionDetails: {
-            subscription: result.subscription,
-            paymentToken: result.paymentToken,
-            customerId: result.customerId,
-            // NO incluir paymentResult aquí para evitar circularidad
-          }
-        };
-      } else {
-        console.log(`[json-response] Procesando pago único - resourcePath: ${resourcePath}`);
-        
-        // Para pagos únicos, usar timeout más corto
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout al obtener estado del pago')), 20000)
-        );
-        
-        paymentData = await Promise.race([
-          this.svc.getPaymentStatus(resourcePath, customerId),
-          timeoutPromise
-        ]);
-      }
-
-      const safe = JSON.parse(
-        JSON.stringify(paymentData, (key, value) => {
-          if (key === 'subscription' || key === 'payments') return undefined;
-          return value;
-        })
-      );
-
-      const duration = Date.now() - startTime;
-      console.log(`[json-response] Éxito en ${duration}ms - redirigiendo a payment-success`);
-
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
-      const encodedData = encodeURIComponent(JSON.stringify(safe));
-      const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
-      
-      response.redirect(302, redirectUrl);
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[json-response] Error después de ${duration}ms:`, error);
-      
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
-      
-      // Si es timeout o error de red, crear datos con estado PENDING
-      const isTimeout = (error as any)?.message?.includes('Timeout') || 
-                       (error as any)?.code === 'ECONNABORTED' ||
-                       (error as any)?.message?.includes('timeout');
-      
-      const err = {
-        error: true,
-        success: false,
-        status: isTimeout ? 'PENDING' : 'ERROR',
-        message: (error as any)?.message || 'Error al procesar el pago',
-        details: { 
-          name: (error as any)?.name, 
-          status: (error as any)?.status,
-          code: (error as any)?.code,
-          isTimeout,
-          duration,
-          // Incluir resourcePath para que el frontend pueda intentar verificar después
-          resourcePath: resourcePath,
-          checkoutId: checkoutId
+        if (type === 'subscription' && customerId && planType) {
+          console.log(`[json-response GET] Procesando suscripción en segundo plano`);
+          const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType as any);
+          paymentData = result;
+        } else {
+          console.log(`[json-response GET] Procesando pago único en segundo plano`);
+          paymentData = await this.svc.getPaymentStatus(resourcePath, customerId);
         }
-      };
-      
-      const encodedData = encodeURIComponent(JSON.stringify(err));
-      const redirectUrl = `${frontendUrl}/payment-success?payment=${encodedData}`;
-      
-      response.redirect(302, redirectUrl);
-    }
+        
+        const duration = Date.now() - startTime;
+        console.log(`[json-response GET] ✅ Pago procesado en segundo plano en ${duration}ms`);
+        console.log(`[json-response GET] Status: ${paymentData?.status || 'N/A'}`);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[json-response GET] ❌ Error en segundo plano después de ${duration}ms:`, error);
+      }
+    };
+
+    // Iniciar proceso en segundo plano (sin esperar)
+    processPaymentInBackground().catch(err => {
+      console.error('[json-response GET] Error no capturado en background:', err);
+    });
+
+    // ✅ REDIRIGIR INMEDIATAMENTE a /payment-processing
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+    const redirectUrl = `${frontendUrl}/payment-processing`;
+    
+    console.log(`[json-response GET] ✅ Redirigiendo inmediatamente a: ${redirectUrl}`);
+    response.redirect(302, redirectUrl);
+  }
+
+  @Post('json-response')
+  @ApiOperation({ summary: 'Endpoint POST que procesa pago y redirige a /payment-processing' })
+  async jsonResponsePost(
+    @Res({ passthrough: false }) response: Response,
+    @Query('type') type: string,
+    @Query('id') checkoutId: string,
+    @Query('resourcePath') resourcePath: string,
+    @Query('customerId') customerId?: string,
+    @Query('planType') planType?: string
+  ) {
+    const startTime = Date.now();
+    console.log(`[json-response POST] Request recibido - type: ${type}, resourcePath: ${resourcePath}`);
+    
+    // ✅ PROCESO EN SEGUNDO PLANO - No bloqueamos la redirección
+    const processPaymentInBackground = async () => {
+      try {
+        let paymentData: any;
+        
+        if (type === 'subscription' && customerId && planType) {
+          console.log(`[json-response POST] Procesando suscripción en segundo plano`);
+          const result = await this.svc.completeSubscriptionSetup(resourcePath, customerId, planType as any);
+          paymentData = result;
+        } else {
+          console.log(`[json-response POST] Procesando pago único en segundo plano`);
+          paymentData = await this.svc.getPaymentStatus(resourcePath, customerId);
+        }
+        
+        const duration = Date.now() - startTime;
+        console.log(`[json-response POST] ✅ Pago procesado en segundo plano en ${duration}ms`);
+        console.log(`[json-response POST] Status: ${paymentData?.status || 'N/A'}`);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[json-response POST] ❌ Error en segundo plano después de ${duration}ms:`, error);
+      }
+    };
+
+    // Iniciar proceso en segundo plano (sin esperar)
+    processPaymentInBackground().catch(err => {
+      console.error('[json-response POST] Error no capturado en background:', err);
+    });
+
+    // ✅ REDIRIGIR INMEDIATAMENTE a /payment-processing
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+    const redirectUrl = `${frontendUrl}/payment-processing`;
+    
+    console.log(`[json-response POST] ✅ Redirigiendo inmediatamente a: ${redirectUrl}`);
+    response.redirect(302, redirectUrl);
   }
 }
